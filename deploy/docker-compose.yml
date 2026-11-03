@@ -1,0 +1,25 @@
+# Container Manager (DS720+) -> Projekt -> Erstellen -> Pfad: /hfs/app/deploy
+# Ordnerstruktur auf dem NAS (siehe ANLEITUNG_DS720.md):
+#   hfs/app/server, hfs/app/deploy   Programm
+#   hfs/daten                        interne Daten (gespeicherte Antworten)
+#   hfs/ergebnisse                   Excel-Dateien für die Kanzlei
+services:
+  hfs-fragebogen:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: hfs-fragebogen:latest
+    container_name: hfs-fragebogen
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # links: Port am NAS (bei Bedarf ändern, z. B. "8090:8080")
+    volumes:
+      - ../../daten:/daten
+      - ../../ergebnisse:/ergebnisse
+    environment:
+      - TZ=Europe/Berlin
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
