@@ -90,8 +90,8 @@ Alle Fragen werden aufgeführt, **auch unbeantwortete** (Antwort leer). Die Tät
 | A2–A5 | Zeitraum „TT.MM.JJJJ – TT.MM.JJJJ“ | Staffeln aus Frage 2 |
 | B2–B5 „Tage“ | Anzahl Tage je Staffel (inkl. Start- und Endtag) | berechnet |
 | C2–C5 „Anteil in %“ | Grad der Beeinträchtigung (z. B. 50 % → 0,5) | Staffeln |
-| D2–D5 „Stundensatz“ | **bleibt leer**, wird in der Kanzlei eingetragen | – |
-| E2–E5 „Stunden/Tag“ | **Vorschlag:** Formel `=B35/7` (Wochensumme / 7) | siehe offene Frage 1 |
+| D2–D5 „Stundensatz“ | **bleibt leer**, wird in der Kanzlei eingetragen (Entscheidung 2) | – |
+| E2–E5 „Stunden/Tag“ | **bleibt leer**, wird in der Kanzlei eingetragen (Entscheidung 1) | – |
 | F2–F6 | Formeln der Vorlage bleiben unverändert | Vorlage |
 | B10–B34 „Wöch Aufw“ | Wochenstunden je Tätigkeit | Abschnitt 4 |
 
@@ -112,8 +112,8 @@ Zuordnung der Tätigkeiten (Fragebogen → HFS-Zeile):
 | Kochen | 20 | Versorgung Haustier | 32 |
 | – | 33 „Reparaturarbeiten“ ² | Sonstiges | 34 |
 
-¹ Excel trennt „Wäsche waschen“ (21) und „Wäsche aufhängen“ (22), der Fragebogen fragt beides zusammen ab. Siehe offene Frage 3.
-² „Reparaturarbeiten“ gibt es im Excel, aber nicht im Fragebogen. Siehe offene Frage 3.
+¹ Excel trennt „Wäsche waschen“ (21) und „Wäsche aufhängen“ (22). Der Fragebogen bleibt wie er ist (Entscheidung 3): Der Wert kommt in Zeile 21, Zeile 22 bleibt leer.
+² „Reparaturarbeiten“ wird nicht in den Fragebogen aufgenommen (Entscheidung 3). Zeile 33 bleibt leer.
 
 Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in **P-Sch** (HFS!F6 → P-Sch!B4) und **S-Sch** sofort.
 
@@ -123,7 +123,7 @@ Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in *
 2. Der Server merkt sich, welche Kennungen schon abgegeben haben, und lehnt eine zweite Abgabe ab.
 3. Danach zeigt die Seite nur noch „Vielen Dank, bereits abgegeben“.
 
-**Grenze (bewusst akzeptiert):** Ein anderer Browser, der Privatmodus oder gelöschte Browserdaten erlauben eine erneute Abgabe. Für allgemeine Fragen reicht das. Eine strengere Lösung, zum Beispiel ein persönlicher Einmal-Link pro Mandant, wäre später möglich (offene Frage 6).
+**Grenze (bewusst akzeptiert):** Ein anderer Browser, der Privatmodus oder gelöschte Browserdaten erlauben eine erneute Abgabe. Für allgemeine Fragen reicht das. Eine strengere Lösung, zum Beispiel ein persönlicher Einmal-Link pro Mandant, wäre später möglich (offene Frage 7).
 
 ## 7. Sicherheit und Datenschutz
 
@@ -144,7 +144,7 @@ Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in *
 
 | Schritt | Inhalt | Ergebnis zum Prüfen |
 |---|---|---|
-| 1 | Plan freigeben, offene Fragen klären | dieser Plan |
+| 1 | Plan freigeben, offene Fragen klären (Fragen 1–4 entschieden) | dieser Plan |
 | 2 | Excel-Erzeugung bauen + automatische Tests | **Beispiel-Excel mit Testdaten** zum Ansehen |
 | 3 | Formular (Frontend) bauen | Screenshots Handy/PC |
 | 4 | Docker-Paket + Installationsanleitung für die DS720+ | Anleitung Schritt für Schritt |
@@ -163,22 +163,23 @@ Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in *
 ## 10. Geplante Ordnerstruktur im Repository
 
 ```
-plan/        dieser Plan
+plan/        dieser Plan, Excel-Vorlage (Anspruchsberechnungen.xlsx), Word-Fragebogen
 server/      Python-Dienst (FastAPI), Excel-Erzeugung, Tests
 server/static/     Formular (HTML/CSS/JS)
-server/templates/  Excel-Vorlage
+server/templates/  Kopie der Excel-Vorlage aus plan/ (wird in Schritt 2 angelegt)
 deploy/      Dockerfile, docker-compose.yml, Anleitung DS720+
 ```
 
-## 11. Offene Fragen an dich
+## 11. Entscheidungen (03.11.2026)
 
-1. **Stunden/Tag (HFS Spalte E):** Soll die App `=Wochensumme/7` vorbefüllen, oder bleibt die Spalte leer für die Kanzlei?
-2. **Stundensatz (Spalte D):** leer lassen oder einen Standardwert vorbefüllen (welchen)?
-3. **Tätigkeitsliste:**
-   - „Wäsche waschen“ und „Wäsche aufhängen“ im Fragebogen trennen, so wie im Excel?
-   - „Reparaturarbeiten“ in den Fragebogen aufnehmen?
-4. **Mehr Fragen aus der Luckey-Checkliste (PDF)?** Möglich wären z. B. Mahlzeiten pro Tag, Waschmaschinenfüllungen pro Woche, Beruf der Haushaltsmitglieder, Sanitär/Heizung, Einkaufsweg. Ja/nein, und welche?
-5. **Datenschutz:** Kanzleiname und Kontakt für Datenschutzerklärung und Einwilligungstext. Oder soll ich zunächst einen Platzhaltertext verwenden?
-6. **„Nur 1×“:** Reicht die Sperre pro Gerät/Browser, oder willst du später persönliche Einmal-Links pro Mandant?
-7. **Repository:** Dürfen die Excel-Vorlage und der Word-Fragebogen ins GitHub-Repository? Die Vorlage wird für die App gebraucht. Die Luckey-PDF würde ich wegen Urheberrecht nicht hochladen.
+1. **Stunden/Tag (HFS Spalte E):** wird **nicht** vorbefüllt, bleibt leer.
+2. **Stundensatz (Spalte D):** bleibt leer.
+3. **Tätigkeitsliste:** bleibt wie im Word-Fragebogen. Wäsche waschen und aufhängen stehen zusammen in Zeile 21, „Reparaturarbeiten“ kommt nicht hinzu.
+4. **Repository:** Excel-Vorlage und Word-Fragebogen liegen im Ordner `plan/`. Die Luckey-PDF wird nicht hochgeladen.
+
+## 12. Noch offene Fragen
+
+5. **Mehr Fragen aus der Luckey-Checkliste (PDF)?** Möglich wären z. B. Mahlzeiten pro Tag, Waschmaschinenfüllungen pro Woche, Beruf der Haushaltsmitglieder, Sanitär/Heizung, Einkaufsweg. Ja/nein, und welche?
+6. **Datenschutz:** Kanzleiname und Kontakt für Datenschutzerklärung und Einwilligungstext. Oder soll ich zunächst einen Platzhaltertext verwenden?
+7. **„Nur 1×“:** Reicht die Sperre pro Gerät/Browser, oder willst du später persönliche Einmal-Links pro Mandant?
 8. **Bisheriger Entwurf:** Es gibt einen ersten Code-Entwurf, nicht im Repository. Soll ich ihn in Schritt 2/3 als Grundlage verwenden?
