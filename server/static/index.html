@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f4e79">
+  <title>Fragebogen Haushaltsführung</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header class="kopf">
+  <h1>Fragebogen Haushaltsführungsschaden</h1>
+  <p>Ihre Angaben helfen uns, Ihren Anspruch wegen der unfallbedingten Einschränkungen im Haushalt zu berechnen. Das Ausfüllen dauert ca. 15 Minuten. Ihre Eingaben werden zwischengespeichert, Sie können also unterbrechen.</p>
+</header>
+
+<main>
+  <section id="hinweis-danke" class="karte meldung erfolg" hidden>
+    <h2>Vielen Dank!</h2>
+    <p>Ihr Fragebogen wurde übermittelt. Ihre Angaben sehen Sie unten.</p>
+  </section>
+  <section id="hinweis-heute" class="karte meldung" hidden>
+    <h2>Fragebogen bereits abgegeben</h2>
+    <p>Sie haben den Fragebogen am <strong data-feld="abgegeben_am"></strong> um <strong data-feld="abgegeben_um"></strong> Uhr abgegeben. Unten sehen Sie Ihre Angaben.</p>
+    <p><strong>Änderungen sind ab morgen möglich.</strong> Öffnen Sie dazu diese Seite morgen erneut auf diesem Gerät.</p>
+  </section>
+  <section id="hinweis-korrektur" class="karte meldung" hidden>
+    <h2>Ihre letzte Abgabe vom <span data-feld="abgegeben_am"></span></h2>
+    <p>Ihre Angaben sind unten bereits eingetragen. Sie können sie ändern und erneut absenden. Die Änderung wird als <strong>Korrektur</strong> zusätzlich übermittelt, Ihre frühere Abgabe bleibt erhalten.</p>
+  </section>
+  <p id="laden" class="karte">Fragebogen wird geladen …</p>
+
+  <form id="fragebogen" novalidate hidden>
+    <fieldset class="karte">
+      <legend>1. Ihre Person</legend>
+      <label>Anrede
+        <select name="anrede">
+          <option value="">–</option><option>Frau</option><option>Herr</option><option>Divers</option>
+        </select>
+      </label>
+      <div class="zwei">
+        <label>Vorname *<input name="vorname" required maxlength="80" autocomplete="given-name"></label>
+        <label>Nachname *<input name="nachname" required maxlength="80" autocomplete="family-name"></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="karte">
+      <legend>2. Haushaltsführung und Beeinträchtigung</legend>
+      <p class="frage">Wie war die Haushaltsführung <u>vor</u> dem Unfall aufgeteilt?</p>
+      <div class="zwei">
+        <label>Ich (%)<input name="anteil_ich_prozent" type="number" min="0" max="100" inputmode="numeric"></label>
+        <label>Andere (%)<input name="anteil_andere_prozent" type="number" min="0" max="100" inputmode="numeric"></label>
+      </div>
+
+      <p class="frage">Über welchen Zeitraum waren Sie unfallbedingt konkret daran gehindert, Ihre Haushaltsführung <u>wie üblich</u> durchzuführen?</p>
+      <div class="zwei">
+        <label>von<input name="gehindert_von" type="date"></label>
+        <label>bis<input name="gehindert_bis" type="date"></label>
+      </div>
+
+      <label class="frage">Warum waren Sie konkret daran gehindert, Ihre Haushaltsführung wie üblich durchzuführen?
+        <textarea name="gehindert_grund" rows="3" maxlength="5000"></textarea>
+      </label>
+
+      <p class="frage">Bitte schätzen Sie den Grad Ihrer unfallbedingten Beeinträchtigung in der Haushaltsführung in Prozent – ggf. gestaffelt, wenn Sie im Rahmen der Genesung wieder mehr Arbeiten durchführen konnten.</p>
+      <div id="staffeln"></div>
+      <button type="button" id="staffel-plus" class="neben">+ weiteren Zeitraum hinzufügen</button>
+
+      <label class="frage">Bei welchen alltäglichen Bewegungen und Tätigkeiten hatten Sie unfallbedingt <u>konkret</u> welche Schmerzen (Arbeit, Sport, beim Schlafen, beim Sitzen etc.)?
+        <textarea name="schmerzen" rows="4" maxlength="5000"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset class="karte">
+      <legend>3. Haushalt und Wohnsituation</legend>
+      <div class="zwei">
+        <label>Personen im Haushalt (Sie eingeschlossen)<input name="personen" type="number" min="1" max="30" inputmode="numeric"></label>
+        <label>Falls Sie Kinder haben: Alter<input name="kinder_alter" maxlength="200" placeholder="z. B. 4 und 9 Jahre"></label>
+      </div>
+      <div class="zwei">
+        <div class="gruppe"><span>Wohnform</span>
+          <label class="wahl"><input type="radio" name="wohnform" value="Haus"> Haus</label>
+          <label class="wahl"><input type="radio" name="wohnform" value="Wohnung"> Wohnung</label>
+        </div>
+        <div class="gruppe"><span>&nbsp;</span>
+          <label class="wahl"><input type="radio" name="wohnverhaeltnis" value="Eigentum"> Eigentum</label>
+          <label class="wahl"><input type="radio" name="wohnverhaeltnis" value="Miete"> Miete</label>
+        </div>
+      </div>
+      <div class="drei">
+        <label>Wohnfläche (qm)<input name="wohnflaeche_qm" type="number" min="0" step="any" inputmode="decimal"></label>
+        <label>Räume<input name="raeume" type="number" min="0" inputmode="numeric"></label>
+        <label>Etagen<input name="etagen" type="number" min="0" inputmode="numeric"></label>
+      </div>
+      <label>Gibt es Besonderheiten (z. B. ungünstig/eng oder günstig/großzügig geschnittene Räume)?
+        <textarea name="besonderheiten" rows="2" maxlength="5000"></textarea>
+      </label>
+      <div class="gruppe"><span>Haben Sie einen Garten?</span>
+        <label class="wahl"><input type="radio" name="garten" value="ja"> Ja</label>
+        <label class="wahl"><input type="radio" name="garten" value="nein"> Nein</label>
+        <label class="inline" data-zeige-wenn="garten=ja">Größe (qm)<input name="garten_qm" type="number" min="0" step="any" inputmode="decimal"></label>
+      </div>
+
+      <div class="gruppe"><span>Welche Haushaltsgeräte besitzen Sie?</span>
+        <div id="geraete" class="raster"></div>
+        <label>Sonstiges<input name="geraete_sonstiges" maxlength="200"></label>
+      </div>
+
+      <div class="gruppe"><span>Haben Sie generell eine Haushaltshilfe?</span>
+        <label class="wahl"><input type="radio" name="haushaltshilfe_generell" value="ja"> Ja</label>
+        <label class="wahl"><input type="radio" name="haushaltshilfe_generell" value="nein"> Nein</label>
+      </div>
+      <div class="gruppe"><span>Hatten Sie <u>während der unfallbedingten</u> Einschränkungen eine <u>bezahlte</u> Haushaltshilfe?</span>
+        <label class="wahl"><input type="radio" name="bezahlte_hilfe" value="ja"> Ja</label>
+        <label class="wahl"><input type="radio" name="bezahlte_hilfe" value="nein"> Nein</label>
+        <div data-zeige-wenn="bezahlte_hilfe=ja">
+          <div class="zwei">
+            <label>von<input name="bezahlte_hilfe_von" type="date"></label>
+            <label>bis<input name="bezahlte_hilfe_bis" type="date"></label>
+          </div>
+          <label>Für welche Tätigkeiten?
+            <textarea name="bezahlte_hilfe_taetigkeiten" rows="2" maxlength="5000"></textarea>
+          </label>
+          <p class="klein">Bitte reichen Sie Zahlungsquittungen, Bewilligungsbescheide etc. separat bei uns ein.</p>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="karte">
+      <legend>4. Tätigkeiten <u>vor</u> dem Unfall</legend>
+      <p class="frage">Welche Tätigkeiten gehörten vor dem Unfall zu Ihrem Aufgabenbereich? Bitte haken Sie an und schätzen Sie den <u>wöchentlichen</u> Zeitaufwand in Stunden.</p>
+      <div id="taetigkeiten-vor" class="liste"></div>
+      <p class="summe">Summe: <strong id="summe-stunden">0</strong> Stunden pro Woche</p>
+    </fieldset>
+
+    <fieldset class="karte">
+      <legend>5. Beeinträchtigung <u>nach</u> dem Unfall</legend>
+      <p class="frage">Bei welchen Tätigkeiten waren Sie nach dem Unfall konkret beeinträchtigt? Bitte geben Sie an, ab wann die Tätigkeit wieder möglich war (leer lassen, falls noch nicht wieder möglich).</p>
+      <div id="taetigkeiten-nach" class="liste"></div>
+    </fieldset>
+
+    <fieldset class="karte" id="abschnitt-absenden">
+      <legend>6. Absenden</legend>
+      <label class="wahl einwilligung"><input type="checkbox" name="einwilligung" required>
+        <span>Ich willige ein, dass meine Angaben (einschließlich Gesundheitsangaben) zur Prüfung und Durchsetzung meiner Ansprüche verarbeitet und verschlüsselt an die Kanzlei übermittelt werden. Hinweise in der <a href="datenschutz.html" target="_blank">Datenschutzerklärung</a>. *</span>
+      </label>
+      <p class="klein">Pro Tag ist auf diesem Gerät eine Abgabe möglich. Änderungen können Sie ab dem Folgetag als Korrektur absenden.</p>
+      <div id="fehler" class="fehler" role="alert" hidden></div>
+      <button type="submit" id="absenden" class="haupt">Fragebogen verbindlich absenden</button>
+    </fieldset>
+  </form>
+</main>
+
+<template id="tpl-staffel">
+  <div class="staffel">
+    <label>von<input type="date" data-feld="von"></label>
+    <label>bis<input type="date" data-feld="bis"></label>
+    <label>Beeinträchtigung (%)<input type="number" min="0" max="100" inputmode="numeric" data-feld="prozent"></label>
+    <button type="button" class="entfernen" aria-label="Zeitraum entfernen">×</button>
+  </div>
+</template>
+</body>
+</html>
