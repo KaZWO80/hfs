@@ -1,6 +1,6 @@
 # Plan: Web-App „Fragebogen Haushaltsführungsschaden“
 
-Stand: 03.11.2026 · Status: **Entwurf zur Freigabe** – es wird erst gebaut, wenn dieser Plan freigegeben ist.
+Stand: 03.11.2026 · Status: **fertig, wartet auf Freigabe** – es wird erst gebaut, wenn dieser Plan freigegeben ist.
 
 ---
 
@@ -13,7 +13,7 @@ Nach dem Absenden entsteht auf dem NAS automatisch **eine Excel-Datei pro Frageb
 - Ein zusätzliches Blatt **„Fragebogen“** enthält **alle Fragen samt Antworten**.
 - Das Blatt **„HFS“** wird mit den Angaben vorbefüllt.
 - Der Dateiname enthält **Nachname und Vorname**.
-- **Pro Gerät/Browser** kann der Fragebogen **nur einmal** abgeschickt werden.
+- **Pro Gerät/Browser höchstens eine Abgabe pro Tag.** Bereits abgegebene Antworten werden angezeigt, Korrekturen ab dem Folgetag kommen in eine neue Datei (Abschnitt 6).
 
 ## 2. Rahmenbedingungen (festgelegt)
 
@@ -117,13 +117,25 @@ Zuordnung der Tätigkeiten (Fragebogen → HFS-Zeile):
 
 Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in **P-Sch** (HFS!F6 → P-Sch!B4) und **S-Sch** sofort.
 
-## 6. „Nur einmal pro Gerät“
+## 6. Abgabe, Anzeige und Korrektur (Sperre pro Tag)
 
-1. Beim ersten Aufruf erzeugt der Browser eine zufällige Kennung (keine persönlichen Daten) und speichert sie.
-2. Der Server merkt sich, welche Kennungen schon abgegeben haben, und lehnt eine zweite Abgabe ab.
-3. Danach zeigt die Seite nur noch „Vielen Dank, bereits abgegeben“.
+**Grundidee:** Pro Gerät/Browser ist **eine Abgabe pro Kalendertag** möglich (deutsche Zeit, Tageswechsel um 0:00 Uhr). Korrekturen sind ab dem nächsten Tag möglich und landen in einer **neuen** Datei. Die alte Datei bleibt erhalten.
 
-**Grenze (bewusst akzeptiert):** Ein anderer Browser, der Privatmodus oder gelöschte Browserdaten erlauben eine erneute Abgabe. Für allgemeine Fragen reicht das. Eine strengere Lösung, zum Beispiel ein persönlicher Einmal-Link pro Mandant, wäre später möglich (offene Frage 7).
+**Technik:** Beim ersten Aufruf erzeugt der Browser eine zufällige Kennung (keine persönlichen Daten) und speichert sie. Der Server speichert zu jeder Kennung die abgegebenen Antworten (intern als JSON-Datei im Ordner `hfs/daten`, nicht im Ergebnisordner) und den Namen der zugehörigen Excel-Datei.
+
+Beim Öffnen der Seite gibt es drei Fälle:
+
+| Fall | Situation | Was die Mandantin/der Mandant sieht |
+|---|---|---|
+| A | Noch nie abgegeben **oder** die Kanzlei hat alle Excel-Dateien dieser Abgabe gelöscht | **Leerer Fragebogen**, normale Abgabe |
+| B | **Heute** schon abgegeben | Die eigenen **Antworten nur zum Lesen** und der Hinweis „Änderungen sind ab morgen möglich.“ Kein Absenden möglich. |
+| C | An einem **früheren Tag** abgegeben, Datei ist noch vorhanden | Fragebogen **mit den letzten Antworten vorausgefüllt**, änderbar. Das Absenden erzeugt eine **neue Excel-Datei** mit dem Datum des neuen Tages. Danach gilt wieder Fall B. |
+
+**Neu beantworten (leerer Fragebogen):** Das geht nur, wenn die Kanzlei vorher die Excel-Datei(en) dieser Person im Ordner `hfs/ergebnisse` **löscht**. Der Server erkennt das beim nächsten Aufruf, verwirft die gespeicherten Antworten und zeigt Fall A.
+
+**Kennzeichnung von Korrekturen:** Das Blatt „Fragebogen“ einer Korrektur enthält die Zeile „Korrektur der Abgabe vom TT.MM.JJJJ (Datei …)“. Der Dateiname folgt demselben Muster wie in 5.1, das neue Datum unterscheidet ihn.
+
+**Grenze (bewusst akzeptiert):** Ein anderer Browser, der Privatmodus oder gelöschte Browserdaten gelten als neues Gerät. Dort beginnt man mit einem leeren Fragebogen, die bisherigen Antworten werden dort nicht angezeigt.
 
 ## 7. Sicherheit und Datenschutz
 
@@ -144,7 +156,7 @@ Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in *
 
 | Schritt | Inhalt | Ergebnis zum Prüfen |
 |---|---|---|
-| 1 | Plan freigeben, offene Fragen klären (Fragen 1–4 entschieden) | dieser Plan |
+| 1 | Plan freigeben (alle Fragen entschieden) | dieser Plan |
 | 2 | Excel-Erzeugung bauen + automatische Tests | **Beispiel-Excel mit Testdaten** zum Ansehen |
 | 3 | Formular (Frontend) bauen | Screenshots Handy/PC |
 | 4 | Docker-Paket + Installationsanleitung für die DS720+ | Anleitung Schritt für Schritt |
@@ -154,7 +166,7 @@ Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in *
 
 ## 9. Installation auf der DS720+ (Vorschau für Schritt 4)
 
-1. In **File Station** den Ordner `hfs` anlegen, darin `app` und `ergebnisse`.
+1. In **File Station** den Ordner `hfs` anlegen, darin `app`, `daten` und `ergebnisse`.
 2. Projektdateien aus dem Repository nach `hfs/app` kopieren.
 3. **Container Manager → Projekt → Erstellen**: Pfad `hfs/app`, vorhandene `docker-compose.yml` verwenden, starten.
 4. Am Handy im WLAN `http://<NAS-IP>:8080` öffnen und testen.
@@ -176,10 +188,7 @@ deploy/      Dockerfile, docker-compose.yml, Anleitung DS720+
 2. **Stundensatz (Spalte D):** bleibt leer.
 3. **Tätigkeitsliste:** bleibt wie im Word-Fragebogen. Wäsche waschen und aufhängen stehen zusammen in Zeile 21, „Reparaturarbeiten“ kommt nicht hinzu.
 4. **Repository:** Excel-Vorlage und Word-Fragebogen liegen im Ordner `plan/`. Die Luckey-PDF wird nicht hochgeladen.
-
-## 12. Noch offene Fragen
-
-5. **Mehr Fragen aus der Luckey-Checkliste (PDF)?** Möglich wären z. B. Mahlzeiten pro Tag, Waschmaschinenfüllungen pro Woche, Beruf der Haushaltsmitglieder, Sanitär/Heizung, Einkaufsweg. Ja/nein, und welche?
-6. **Datenschutz:** Kanzleiname und Kontakt für Datenschutzerklärung und Einwilligungstext. Oder soll ich zunächst einen Platzhaltertext verwenden?
-7. **„Nur 1×“:** Reicht die Sperre pro Gerät/Browser, oder willst du später persönliche Einmal-Links pro Mandant?
-8. **Bisheriger Entwurf:** Es gibt einen ersten Code-Entwurf, nicht im Repository. Soll ich ihn in Schritt 2/3 als Grundlage verwenden?
+5. **Keine zusätzlichen Fragen** aus der Luckey-Checkliste.
+6. **Datenschutz:** zunächst Platzhaltertexte für Datenschutzerklärung und Einwilligung, gekennzeichnet mit `[PLATZHALTER]`. Diese müssen vor dem Echtbetrieb ersetzt werden.
+7. **Sperre pro Tag** mit Anzeige und Korrektur, siehe Abschnitt 6.
+8. **Umsetzung:** Der bisherige Code-Entwurf dient als technische Ausgangsbasis und wird an diesen Plan angepasst, zum Beispiel ohne Vorbefüllung von Spalte E und mit der Tagessperre.
