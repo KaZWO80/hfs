@@ -1,7 +1,9 @@
 # Installation auf der Synology DS720+ (Prototyp)
 
-Diese Anleitung installiert den Fragebogen als Container auf der DS720+. Danach ist er **im eigenen WLAN/LAN** erreichbar unter
-`http://<IP-des-NAS>:8080`.
+Diese Anleitung installiert den Fragebogen als Container auf der DS720+. Danach ist er **im eigenen WLAN/LAN** erreichbar:
+
+- unverschlüsselt unter `http://<IP-des-NAS>:8080` (Teil 4)
+- **verschlüsselt** unter `https://<IP-des-NAS>:8443` über den Reverse Proxy von DSM (Teil 4b, empfohlen)
 
 > **Wichtig für den Prototyp:** keine Portfreigabe im Router einrichten und nur Testdaten eingeben. Der Echtbetrieb mit HTTPS folgt später (Plan, Schritt 7).
 
@@ -53,15 +55,68 @@ Zeitaufwand: ca. 20–30 Minuten. Die Menünamen beziehen sich auf DSM 7.2 und k
 
 ## Teil 4 – Aufrufen und testen
 
-1. **IP-Adresse des NAS** herausfinden: **Systemsteuerung → Netzwerk → Netzwerkschnittstelle** (z. B. `192.168.178.50`).
+1. **IP-Adresse des NAS** herausfinden: **Systemsteuerung → Netzwerk → Netzwerkschnittstelle** (z. B. `192.168.188.100`).
 2. Am Handy, Tablet oder PC **im selben WLAN** im Browser eingeben:
-   **`http://192.168.178.50:8080`** (mit deiner IP)
+   **`http://192.168.188.100:8080`** (mit deiner IP)
+
+   > Das **`http://` unbedingt mit eintippen.** Ohne Angabe versuchen Chrome und Edge automatisch `https://`, was an Port 8080 mit **`ERR_SSL_PROTOCOL_ERROR`** scheitert. Kommt der Fehler trotzdem, die automatische Umstellung ausschalten:
+   > - **Chrome:** Einstellungen → Datenschutz und Sicherheit → Sicherheit → „Immer sichere Verbindungen verwenden“ aus
+   > - **Edge:** Einstellungen → Datenschutz, Suche und Dienste → Sicherheit → „Automatisch zu sichereren Verbindungen wechseln“ aus
+   >
+   > Einfacher ist es, gleich die verschlüsselte Adresse aus **Teil 4b** zu verwenden.
 3. Tipp: Die Seite am Handy zum Startbildschirm hinzufügen, dann sieht sie aus wie eine App.
    - iPhone: Teilen → „Zum Home-Bildschirm“
    - Android: Menü ⋮ → „Zum Startbildschirm hinzufügen“
 
 **Seite lädt nicht?**
-- Prüfe unter **Systemsteuerung → Sicherheit → Firewall**, ob die Firewall aktiv ist. Wenn ja, eine Regel hinzufügen: Port **8080/TCP** erlauben, Quelle: dein Heimnetz (z. B. `192.168.178.0/24`).
+- Prüfe unter **Systemsteuerung → Sicherheit → Firewall**, ob die Firewall aktiv ist. Wenn ja, eine Regel hinzufügen: Port **8080/TCP** erlauben, Quelle: dein Heimnetz (z. B. `192.168.188.0/24`).
+
+## Teil 4b – Verschlüsselte Verbindung (HTTPS) einrichten
+
+DSM nimmt die verschlüsselte Verbindung auf Port **8443** entgegen und leitet sie intern an den Container weiter. Am Container und an `docker-compose.yml` ändert sich nichts.
+
+### 1. Reverse-Proxy-Regel anlegen
+
+**Systemsteuerung → Anmeldeportal → Erweitert → Reverse Proxy → Erstellen**
+
+| Feld | Eintrag |
+|---|---|
+| Beschreibung des Reverse Proxy | `hfs-fragebogen` |
+| **Quelle** – Protokoll | `HTTPS` |
+| Quelle – Hostname | `*` |
+| Quelle – Port | `8443` |
+| HSTS aktivieren | **nein** (sonst lässt sich die Zertifikatswarnung nicht bestätigen) |
+| **Ziel** – Protokoll | `HTTP` |
+| Ziel – Hostname | `localhost` |
+| Ziel – Port | `8080` |
+
+Mit **Speichern** bestätigen. Der Reiter „Benutzerdefinierte Kopfzeile“ wird nicht benötigt.
+
+### 2. Zertifikat prüfen
+
+**Systemsteuerung → Sicherheit → Zertifikat → Einstellungen**: In der Liste erscheint der Dienst `hfs-fragebogen` (Port 8443). Als Zertifikat das **Standardzertifikat** (meist „synology“) auswählen und **OK**.
+
+### 3. Firewall (nur wenn die DSM-Firewall aktiv ist)
+
+**Systemsteuerung → Sicherheit → Firewall → Regeln bearbeiten**: Port **8443/TCP** für dein Heimnetz erlauben (z. B. Quelle `192.168.188.0/24`).
+
+### 4. Aufrufen
+
+**`https://192.168.188.100:8443`** (mit deiner NAS-IP)
+
+Beim ersten Aufruf zeigt **jedes Gerät einmal eine Warnung** („Verbindung ist nicht privat“ bzw. „nicht sicher“). Das ist im Heimnetz normal: Das Zertifikat der NAS ist selbst ausgestellt und nicht von einer öffentlichen Stelle bestätigt. **Die Verbindung ist trotzdem verschlüsselt.** Bestätigen so:
+
+| Gerät / Browser | Bestätigen |
+|---|---|
+| Chrome / Edge (PC, Android) | **Erweitert** → **Weiter zu 192.168.188.100 (unsicher)** |
+| Safari (iPhone, iPad, Mac) | **Details einblenden** → **diese Website besuchen** → nochmals **Website besuchen** |
+| Firefox | **Erweitert…** → **Risiko akzeptieren und fortfahren** |
+
+Danach merkt sich der Browser die Ausnahme für diese Adresse.
+
+> **Hinweis:** Die Ausnahme gilt pro Gerät und Browser. Für Mandanten im Echtbetrieb ist diese Warnung nicht zumutbar, dort folgt in Schritt 7 eine eigene Internetadresse mit offiziellem Let's-Encrypt-Zertifikat, dann ohne Warnung.
+
+**Optional:** Soll der Fragebogen **nur noch verschlüsselt** erreichbar sein, in `deploy/docker-compose.yml` die Zeile `- "8080:8080"` in `- "127.0.0.1:8080:8080"` ändern und das Projekt neu erstellen (Teil 6). Dann ist Port 8080 von außen gesperrt und nur der Reverse Proxy erreicht den Container. Eine Firewall-Regel für 8080 ist dann nicht mehr nötig.
 
 ## Teil 5 – Ergebnisse ansehen und verwalten
 
@@ -80,6 +135,9 @@ Zeitaufwand: ca. 20–30 Minuten. Die Menünamen beziehen sich auf DSM 7.2 und k
 
 | Problem | Lösung |
 |---|---|
+| `ERR_SSL_PROTOCOL_ERROR` / „keine sichere Verbindung“ an Port 8080 | Der Browser versucht `https://` an Port 8080. Entweder `http://…:8080` eintippen (Teil 4) oder `https://…:8443` verwenden (Teil 4b). |
+| An Port 8443 erscheint die DSM-Anmeldung oder „Seite nicht gefunden“ | Reverse-Proxy-Regel prüfen: Ziel muss `HTTP` / `localhost` / `8080` sein, Quelle `HTTPS` / `8443`. |
+| Zertifikatswarnung lässt sich nicht wegklicken | In der Reverse-Proxy-Regel **HSTS ausschalten**, Browserverlauf für die Adresse löschen, erneut aufrufen. |
 | Projekt lässt sich nicht erstellen, Port 8080 belegt | In `deploy/docker-compose.yml` die Zeile `"8080:8080"` z. B. in `"8090:8080"` ändern. Aufruf dann mit `:8090`. |
 | „Der Fragebogen konnte nicht geladen werden“ | Container läuft nicht. Unter **Container → hfs-fragebogen → Details → Protokoll** nachsehen. |
 | Excel-Datei lässt sich nicht löschen | **Systemsteuerung → Freigegebener Ordner → hfs → Bearbeiten → Berechtigungen** prüfen, ob dein Benutzer Lesen/Schreiben hat. Notfalls als Administrator in File Station löschen. |
@@ -92,6 +150,7 @@ Zeitaufwand: ca. 20–30 Minuten. Die Menünamen beziehen sich auf DSM 7.2 und k
 
 Bitte auf **Handy, Tablet und PC** durchgehen und Auffälligkeiten notieren:
 
+- [ ] `https://<NAS-IP>:8443` öffnet sich nach einmaligem Bestätigen der Zertifikatswarnung
 - [ ] Seite öffnet sich, alle Abschnitte 1–6 sind gut lesbar und bedienbar
 - [ ] Datumsfelder zeigen das deutsche Format (TT.MM.JJJJ)
 - [ ] Kommazahlen (z. B. „1,5“ Std./Woche) lassen sich eingeben

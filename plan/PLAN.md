@@ -140,7 +140,7 @@ Beim Öffnen der Seite gibt es drei Fälle:
 ## 7. Sicherheit und Datenschutz
 
 **Prototyp (nur im Heimnetz):**
-- Aufruf über `http://<NAS-IP>:8080`, ohne Router-Freigabe, also nicht aus dem Internet erreichbar.
+- Aufruf über `http://<NAS-IP>:8080` oder verschlüsselt über `https://<NAS-IP>:8443` (DSM-Reverse-Proxy mit NAS-eigenem Zertifikat, einmalige Browser-Warnung; Anleitung Teil 4b). Ohne Router-Freigabe, also nicht aus dem Internet erreichbar.
 - Testen von unterwegs nur über **Tailscale** (Synology-Paket), nicht über offene Ports.
 - Nur Testdaten eingeben, keine echten Mandantendaten.
 
