@@ -1,6 +1,6 @@
 # Plan: Web-App „Fragebogen Haushaltsführungsschaden“
 
-Stand: 03.11.2026 · Status: **fertig, wartet auf Freigabe** – es wird erst gebaut, wenn dieser Plan freigegeben ist.
+Stand: 04.11.2026 · Status: Schritte 1–4 umgesetzt, Schritt 5 (Test) läuft · **Schritt 6 (Abschnitt 12) wartet auf Freigabe**
 
 ---
 
@@ -119,6 +119,8 @@ Excel berechnet beim Öffnen alle Formeln neu. Damit stimmen auch die Werte in *
 
 ## 6. Abgabe, Anzeige und Korrektur (Sperre pro Tag)
 
+> **Wird mit Schritt 6 ersetzt** durch das Aktenzeichen-Verfahren in Abschnitt 12.2. Dieser Abschnitt beschreibt den Stand nach Schritt 4.
+
 **Grundidee:** Pro Gerät/Browser ist **eine Abgabe pro Kalendertag** möglich (deutsche Zeit, Tageswechsel um 0:00 Uhr). Korrekturen sind ab dem nächsten Tag möglich und landen in einer **neuen** Datei. Die alte Datei bleibt erhalten.
 
 **Technik:** Beim ersten Aufruf erzeugt der Browser eine zufällige Kennung (keine persönlichen Daten) und speichert sie. Der Server speichert zu jeder Kennung die abgegebenen Antworten (intern als JSON-Datei im Ordner `hfs/daten`, nicht im Ergebnisordner) und den Namen der zugehörigen Excel-Datei.
@@ -161,7 +163,7 @@ Beim Öffnen der Seite gibt es drei Fälle:
 | 3 | Formular (Frontend) bauen | Screenshots Handy/PC |
 | 4 | Docker-Paket + Installationsanleitung für die DS720+ | Anleitung Schritt für Schritt |
 | 5 | Du installierst auf der DS720+ und testest auf Handy, Tablet, PC | Feedback-Liste |
-| 6 | Korrekturen | – |
+| 6 | Korrekturen aus dem Test + Aktenzeichen-Verfahren (Abschnitt 12) | Screenshots + Beispiel-Excel |
 | 7 | (später) Echtbetrieb: HTTPS, Datenschutz, Härtung | eigene Freigabe |
 
 ## 9. Installation auf der DS720+ (Vorschau für Schritt 4)
@@ -192,3 +194,47 @@ deploy/      Dockerfile, docker-compose.yml, Anleitung DS720+
 6. **Datenschutz:** zunächst Platzhaltertexte für Datenschutzerklärung und Einwilligung, gekennzeichnet mit `[PLATZHALTER]`. Diese müssen vor dem Echtbetrieb ersetzt werden.
 7. **Sperre pro Tag** mit Anzeige und Korrektur, siehe Abschnitt 6.
 8. **Umsetzung:** Der bisherige Code-Entwurf dient als technische Ausgangsbasis und wird an diesen Plan angepasst, zum Beispiel ohne Vorbefüllung von Spalte E und mit der Tagessperre.
+
+## 12. Schritt 6 – Korrekturen aus dem Test (04.11.2026, wartet auf Freigabe)
+
+### 12.1 Fehlerbehebungen im Formular
+
+| Nr. | Rückmeldung | Umsetzung |
+|---|---|---|
+| 1 | Aufteilung „Ich % / Andere %“ muss 100 % ergeben | Bei Eingabe von „Ich“ wird „Andere“ automatisch als 100 − Ich eingetragen (und umgekehrt). Sind beide ausgefüllt und die Summe ≠ 100, erscheint beim Absenden ein Hinweis. Der Server prüft zusätzlich. Bleiben beide leer, ist das weiterhin erlaubt. |
+| 2 | „Std./Woche“ am Desktop nicht sichtbar | CSS-Fehler: Eine Breitenvorgabe für das Handy wirkte auch am Desktop und drückte das Eingabefeld zusammen. Wird korrigiert und mit Screenshots am PC, Tablet und Handy geprüft. |
+| 3 | „wieder möglich ab“ zu schmal, 3 Zeilen | Gleiche Ursache wie Nr. 2. „wieder möglich ab“ steht am Desktop in einer Zeile, das Datumsfeld ist breit genug für TT.MM.JJJJ. |
+| 4 | Gestaffelte Beeinträchtigung: % fehlt trotz von–bis | Ein Zeitraum ist nur vollständig mit von, bis **und** %. Fehlt ein Teil, erscheint ein Hinweis am Zeitraum, das Absenden ist dann nicht möglich. Bisher wurden unvollständige Zeiträume beim Absenden stillschweigend weggelassen. |
+
+### 12.2 Neues Verfahren: Aktenzeichen statt Gerätesperre
+
+Ersetzt Abschnitt 6. Entscheidungen vom 04.11.2026:
+
+| Punkt | Entscheidung |
+|---|---|
+| Zugang | **Aktenzeichen + Nachname** |
+| Dateiname | **`HFS_<Aktenzeichen>_<JJJJ-MM-TT>_<hhmmss>.xlsx`**, z. B. `HFS_123-26_2026-11-04_143000.xlsx`. „/“, Leerzeichen und Sonderzeichen im Aktenzeichen werden zu „-“. |
+| Tagessperre | **entfällt**. Korrekturen sind jederzeit möglich. |
+| Vorschlagswerte | aus der **neuesten Excel-Datei** zum Aktenzeichen, gelesen aus einem **ausgeblendeten Blatt** mit den Originalantworten. Änderungen der Kanzlei im sichtbaren Blatt werden nicht übernommen. |
+
+**Ablauf für den Mandanten:**
+
+1. **Startseite:** Aktenzeichen (von der Kanzlei mitgeteilt) und Nachname eingeben → „Weiter“.
+2. Der Server sucht in `hfs/ergebnisse` die neueste Datei `HFS_<Aktenzeichen>_….xlsx`:
+   - **Keine Datei vorhanden:** leerer Fragebogen. Der Nachname ist schon eingetragen.
+   - **Datei vorhanden, Nachname passt:** Fragebogen mit den Antworten aus der neuesten Datei vorausgefüllt, Hinweis „Ihre letzte Abgabe vom …“.
+   - **Datei vorhanden, Nachname passt nicht:** Meldung „Aktenzeichen und Nachname passen nicht zusammen. Bitte prüfen Sie Ihre Eingabe oder wenden Sie sich an die Kanzlei.“ Es werden keine Daten angezeigt.
+3. **Absenden:** Es wird immer eine **neue** Datei mit Aktenzeichen, Datum und Uhrzeit angelegt, die früheren Dateien bleiben erhalten. Ist es nicht die erste Abgabe, steht im Blatt „Fragebogen“ der Vermerk „Korrektur der Abgabe vom … (Datei …)“.
+   - **Nichts geändert:** Das erneute Absenden wird mit dem Hinweis „Sie haben nichts geändert“ abgelehnt, es entsteht keine doppelte Datei.
+
+**Regeln und Schutz:**
+- Der **Nachname** ist nach der Startseite im Formular gesperrt, damit Aktenzeichen und Name zusammenpassen. Eine Namenskorrektur nimmt die Kanzlei vor.
+- **Schutz gegen Durchprobieren:** Nach 10 Fehlversuchen von derselben Adresse innerhalb von 15 Minuten wird die Anmeldung für 15 Minuten gesperrt.
+- Der Vergleich des Nachnamens unterscheidet nicht nach Groß-/Kleinschreibung und Leerzeichen, und „ü“ = „ue“.
+- **Neu beantworten (leer):** Die Kanzlei löscht alle Dateien des Aktenzeichens in `hfs/ergebnisse`. Löscht sie nur die neueste, gilt die vorherige als Vorschlag.
+- **Zur Kanzlei-Seite:** Der Ordner `hfs/daten` und die Browser-Kennung werden nicht mehr benötigt. Die Excel-Dateien sind die einzige Datenquelle.
+- Das Aktenzeichen steht zusätzlich oben im Blatt „Fragebogen“.
+- **Bewusst akzeptierte Grenze:** Wer Aktenzeichen **und** Nachname eines anderen Mandanten kennt, kann dessen Angaben sehen und ändern. Für den Echtbetrieb kann ein zusätzlicher Zugangscode nachgerüstet werden.
+- Gilt auch für bestehende Testdateien: Dateien nach dem alten Namensschema (ohne Aktenzeichen) werden vom neuen Verfahren nicht gefunden. Die Testdateien in `hfs/ergebnisse` am besten vor dem Update löschen.
+
+**Anpassungen an der Anleitung:** Der Ordner `hfs/daten` entfällt. Teil 5 und die Test-Checkliste werden auf das Aktenzeichen-Verfahren umgestellt.
