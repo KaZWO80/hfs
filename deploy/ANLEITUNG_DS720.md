@@ -171,6 +171,8 @@ Bitte auf **Handy, Tablet und PC** durchgehen und Auffälligkeiten notieren:
 - [ ] Am PC: Zahl bei „Std./Woche“ sichtbar, „wieder möglich ab“ in einer Zeile mit breitem Datumsfeld
 - [ ] „Ich“ 70 % eintragen → „Andere“ wird automatisch 30 %
 - [ ] Zeitraum mit von–bis, aber ohne % → Hinweis am Zeitraum, Absenden nicht möglich
+- [ ] Tätigkeit vor dem Unfall angehakt, aber keine Stunden (oder 0) → Zeile rot markiert, Absenden nicht möglich
+- [ ] Beeinträchtigte Tätigkeit ohne Datum „wieder möglich ab“ → erlaubt, in Excel „noch nicht wieder möglich“
 - [ ] Zeiträume hinzufügen und entfernen funktioniert
 - [ ] Seite schließen und wieder öffnen: Eingaben sind noch da
 - [ ] Absenden ohne Einwilligung → Hinweis erscheint

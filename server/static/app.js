@@ -147,6 +147,24 @@ function pruefeStaffeln(anzeigen) {
   return fehler;
 }
 
+// ------------------------------- Tätigkeiten vor dem Unfall: Stunden ----
+/** Angehakte Tätigkeiten ohne Stunden (> 0) markieren. Liefert Fehlertexte. */
+function pruefeStunden(anzeigen) {
+  const fehlend = [];
+  for (const t of def.taetigkeiten) {
+    const zeile = form.elements[`vor.${t.key}.aktiv`].closest(".zeile");
+    const aktiv = form.elements[`vor.${t.key}.aktiv`].checked;
+    const s = zahl(form.elements[`vor.${t.key}.stunden`].value);
+    const fehlt = aktiv && !(s > 0);
+    if (fehlt) fehlend.push(t.label);
+    if (!fehlt) zeile.classList.remove("fehlerhaft");
+    else if (anzeigen) zeile.classList.add("fehlerhaft");
+  }
+  return fehlend.length
+    ? [`Tätigkeiten vor dem Unfall: Bitte Stunden pro Woche angeben für: ${fehlend.join(", ")}.`]
+    : [];
+}
+
 // ---------------------------------------------- Formular <-> Antwort ------
 function zahl(v) {
   if (v === "" || v == null) return null;
@@ -344,6 +362,7 @@ function pruefe(d) {
   if (!pruefeAnteil(true)) f.push("Aufteilung der Haushaltsführung: „Ich“ und „Andere“ müssen zusammen 100 % ergeben.");
   if (d.gehindert_von && d.gehindert_bis && d.gehindert_bis < d.gehindert_von) f.push("Zeitraum der Verhinderung: „bis“ liegt vor „von“.");
   f.push(...pruefeStaffeln(true));
+  f.push(...pruefeStunden(true));
   if (!d.einwilligung) f.push("Bitte bestätigen Sie die Einwilligung zur Datenverarbeitung.");
   return f;
 }
@@ -411,6 +430,8 @@ async function start() {
   form.elements.anteil_andere_prozent.addEventListener("input", e => ergaenzeAnteil(e.target, form.elements.anteil_ich_prozent));
   $("staffel-plus").addEventListener("click", () => neueStaffel());
   $("staffeln").addEventListener("input", () => pruefeStaffeln(false));
+  $("taetigkeiten-vor").addEventListener("input", () => pruefeStunden(false));
+  $("taetigkeiten-vor").addEventListener("change", () => pruefeStunden(false));
   form.addEventListener("input", () => { aktualisiere(); entwurfSpeichern(); });
   form.addEventListener("change", () => { aktualisiere(); entwurfSpeichern(); });
   form.addEventListener("submit", absenden);

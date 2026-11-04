@@ -293,4 +293,6 @@ input.gesperrt, input[readonly] { background: var(--hinter); color: var(--grau);
 .staffel .feldfehler { grid-column: 1 / -1; margin: 8px 0 0; padding-right: 56px; }
 @media (min-width: 640px) { .staffel .feldfehler { padding-right: 0; } }
 .staffel.fehlerhaft { outline: 2px solid var(--rot); outline-offset: -2px; }
+.liste .zeile.fehlerhaft { background: color-mix(in srgb, var(--rot) 8%, transparent); box-shadow: inset 4px 0 0 var(--rot); padding-left: 8px; }
+.liste .zeile.fehlerhaft label.stunden input { border-color: var(--rot); outline: 1px solid var(--rot); }
 .meldung button.neben { width: auto; margin: 8px 8px 0 0; }

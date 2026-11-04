@@ -163,3 +163,22 @@ def test_seiten_und_sicherheitsheader(client):
     assert client.get("/datenschutz.html").status_code == 200
     assert client.get("/api/fragebogen").json()["max_staffeln"] == 4
     assert client.get("/docs").status_code == 404
+
+
+def test_aeltere_abgabe_ohne_stunden_kann_korrigiert_werden(client, uhr, ordner):
+    """Abgaben aus der Zeit vor der Stunden-Pflicht dienen weiter als Vorschlag
+    und lassen sich korrigieren."""
+    import json
+    client.post("/api/antwort", json=beispiel())
+    pfad = next(ordner.glob("*.xlsx"))
+    wb = load_workbook(pfad)
+    daten = json.loads(wb["_Daten"]["A2"].value)
+    daten["taetigkeiten_vor"]["kochen"]["stunden_pro_woche"] = None  # wie eine alte Abgabe
+    wb["_Daten"]["A2"] = json.dumps(daten, ensure_ascii=False)
+    wb.save(pfad)
+
+    st = anmelden(client).json()
+    assert st["vorhanden"] and st["antwort"]["taetigkeiten_vor"]["kochen"]["stunden_pro_woche"] is None
+    uhr.stelle(2026, 11, 4, 11, 0, 0)
+    r = client.post("/api/antwort", json=beispiel())
+    assert r.status_code == 201 and r.json()["korrektur"] is True

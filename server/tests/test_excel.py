@@ -191,6 +191,8 @@ def test_korrektur_wird_gekennzeichnet(tmp_path):
     {"nachname": "  "},
     {"geraete": ["atomreaktor"]},
     {"taetigkeiten_vor": {"fliegen": {"aktiv": True}}},
+    {"taetigkeiten_vor": {"kochen": {"aktiv": True}}},
+    {"taetigkeiten_vor": {"kochen": {"aktiv": True, "stunden_pro_woche": 0}}},
     {"aktenzeichen": "../../x"},
     {"aktenzeichen": ""},
     {"aktenzeichen": "A" * 31},

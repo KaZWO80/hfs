@@ -206,6 +206,13 @@ deploy/      Dockerfile, docker-compose.yml, Anleitung DS720+
 | 3 | „wieder möglich ab“ zu schmal, 3 Zeilen | Gleiche Ursache wie Nr. 2. „wieder möglich ab“ steht am Desktop in einer Zeile, das Datumsfeld ist breit genug für TT.MM.JJJJ. |
 | 4 | Gestaffelte Beeinträchtigung: % fehlt trotz von–bis | Ein Zeitraum ist nur vollständig mit von, bis **und** %. Fehlt ein Teil, erscheint ein Hinweis am Zeitraum, das Absenden ist dann nicht möglich. Bisher wurden unvollständige Zeiträume beim Absenden stillschweigend weggelassen. |
 
+### 12.1a Nachtrag aus dem zweiten Test (04.11.2026)
+
+| Nr. | Rückmeldung | Umsetzung |
+|---|---|---|
+| 5 | „Tätigkeiten vor dem Unfall“: Stunden Pflicht, wenn angehakt | Angehakte Tätigkeiten brauchen **mehr als 0** Std./Woche. Fehlt der Wert, wird die Zeile rot markiert und im Hinweis genannt, der Server prüft zusätzlich. Ältere Abgaben ohne Stunden dienen weiter als Vorschlag. |
+| 6 | „Beeinträchtigung nach dem Unfall“: Datum Pflicht? | **Nein** (Entscheidung): Das Datum darf leer bleiben und bedeutet „noch nicht wieder möglich“. |
+
 ### 12.2 Neues Verfahren: Aktenzeichen statt Gerätesperre
 
 Ersetzt Abschnitt 6. Entscheidungen vom 04.11.2026:

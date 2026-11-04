@@ -143,7 +143,10 @@ def antwort_speichern(antwort: Antwort, request: Request):
         abgabe, vorher = _pruefe_zugang(request, antwort.aktenzeichen, antwort.nachname)
         korrektur = None
         if abgabe:
-            vorher_vergleich = Antwort.model_validate({**vorher, "einwilligung": True}).vergleichsdaten()
+            try:
+                vorher_vergleich = Antwort.model_validate({**vorher, "einwilligung": True}).vergleichsdaten()
+            except ValueError:  # ältere Abgabe erfüllt neuere Prüfregeln nicht -> gilt als geändert
+                vorher_vergleich = None
             if vorher_vergleich == antwort.vergleichsdaten():
                 raise HTTPException(409, "Sie haben nichts geändert. Ihre Angaben vom "
                                          f"{abgabe.zeit:%d.%m.%Y} liegen der Kanzlei bereits vor.")

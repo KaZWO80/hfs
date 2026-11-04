@@ -53,6 +53,12 @@ class TaetigkeitVor(BaseModel):
     stunden_pro_woche: Optional[float] = Field(default=None, ge=0, le=168)
     detail: str = Kurztext
 
+    @model_validator(mode="after")
+    def _stunden_pflicht(self):
+        if self.aktiv and not (self.stunden_pro_woche and self.stunden_pro_woche > 0):
+            raise ValueError("Bei angehakter Tätigkeit sind die Stunden pro Woche (mehr als 0) Pflicht.")
+        return self
+
 
 class TaetigkeitNach(BaseModel):
     beeintraechtigt: bool = False
