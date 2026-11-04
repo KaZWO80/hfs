@@ -1,6 +1,6 @@
 # Plan: Web-App „Fragebogen Haushaltsführungsschaden“
 
-Stand: 04.11.2026 · Status: Schritte 1–4 umgesetzt, Schritt 5 (Test) läuft · **Schritt 6 (Abschnitt 12) wartet auf Freigabe**
+Stand: 04.11.2026 · Status: Schritte 1–4 umgesetzt, Schritt 5 (Test) läuft · Schritt 6 (Abschnitt 12) umgesetzt, wartet auf deinen Test
 
 ---
 
@@ -195,7 +195,7 @@ deploy/      Dockerfile, docker-compose.yml, Anleitung DS720+
 7. **Sperre pro Tag** mit Anzeige und Korrektur, siehe Abschnitt 6.
 8. **Umsetzung:** Der bisherige Code-Entwurf dient als technische Ausgangsbasis und wird an diesen Plan angepasst, zum Beispiel ohne Vorbefüllung von Spalte E und mit der Tagessperre.
 
-## 12. Schritt 6 – Korrekturen aus dem Test (04.11.2026, wartet auf Freigabe)
+## 12. Schritt 6 – Korrekturen aus dem Test (04.11.2026, freigegeben und umgesetzt)
 
 ### 12.1 Fehlerbehebungen im Formular
 

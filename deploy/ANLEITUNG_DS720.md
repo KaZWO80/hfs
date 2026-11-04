@@ -18,12 +18,11 @@ Zeitaufwand: ca. 20–30 Minuten. Die Menünamen beziehen sich auf DSM 7.2 und k
    - „Papierkorb aktivieren“: **ja**. Gelöschte Excel-Dateien lassen sich so wiederherstellen.
    - Verschlüsselung: für den Prototyp nicht nötig. Für den Echtbetrieb ist sie vorgesehen.
    - Berechtigungen: dein Benutzer **Lesen/Schreiben**, andere Benutzer **kein Zugriff**.
-2. **File Station** öffnen, in `hfs` drei Unterordner anlegen:
+2. **File Station** öffnen, in `hfs` zwei Unterordner anlegen:
 
    ```
    hfs/
    ├── app/          ← Programm
-   ├── daten/        ← interne Daten (gespeicherte Antworten) – nicht bearbeiten
    └── ergebnisse/   ← hier erscheinen die Excel-Dateien
    ```
 
@@ -120,15 +119,29 @@ Danach merkt sich der Browser die Ausnahme für diese Adresse.
 
 ## Teil 5 – Ergebnisse ansehen und verwalten
 
-- Jede Abgabe erzeugt eine Datei in **`hfs/ergebnisse`**, z. B. `HFS_Mustermann_Max_2026-11-03_143000.xlsx`.
+### So funktioniert das Aktenzeichen-Verfahren
+
+1. Die Kanzlei teilt dem Mandanten ein **Aktenzeichen** mit (z. B. `123/26`) und den Link zum Fragebogen.
+2. Der Mandant meldet sich mit **Aktenzeichen + Nachname** an und füllt den Fragebogen aus.
+3. Jede Abgabe erzeugt eine Datei in **`hfs/ergebnisse`**: `HFS_<Aktenzeichen>_<Datum>_<Uhrzeit>.xlsx`, z. B. `HFS_123-26_2026-11-04_143000.xlsx` („/“ im Aktenzeichen wird zu „-“).
+4. Meldet sich der Mandant später erneut an, sind seine Angaben aus der **neuesten** Datei dieses Aktenzeichens vorausgefüllt. Ändert er etwas und sendet ab, entsteht eine **neue** Datei mit dem Vermerk „Korrektur der Abgabe vom …“. Die älteren Dateien bleiben erhalten. Unverändertes erneutes Absenden wird abgelehnt.
+5. Passt der Nachname nicht zum Aktenzeichen, werden keine Daten angezeigt. Nach 10 Fehlversuchen ist die Anmeldung für dieses Aktenzeichen 15 Minuten gesperrt.
+
+> **Hinweis:** `123/26` und `123-26` gelten als dasselbe Aktenzeichen, weil beide den gleichen Dateinamen ergeben.
+
+### Dateien verwalten
+
 - Öffnen: per File Station herunterladen, über die Netzwerkfreigabe `\\<NAS-IP>\hfs\ergebnisse` am PC, oder per **Synology Drive** auf den PC synchronisieren (Drive-Client → Synchronisierungsaufgabe → Ordner `hfs/ergebnisse`).
-- **Neu beantworten lassen:** Die Excel-Datei(en) dieser Person in `hfs/ergebnisse` **löschen**. Beim nächsten Aufruf bekommt die Person auf ihrem Gerät wieder einen leeren Fragebogen.
-- Den Ordner **`hfs/daten` bitte nicht verändern.** Dort merkt sich das Programm, welches Gerät wann abgegeben hat.
+- **Neu beantworten lassen (leerer Fragebogen):** **alle** Dateien des Aktenzeichens in `hfs/ergebnisse` löschen. Wird nur die neueste gelöscht, gilt die vorherige wieder als Vorschlag.
+- **Nachname falsch geschrieben?** Der Mandant kann den Nachnamen im Formular nicht ändern. Die Kanzlei löscht dann die Dateien des Aktenzeichens, und der Mandant meldet sich mit dem richtigen Namen neu an.
+- Jede Excel-Datei enthält ein **ausgeblendetes Blatt `_Daten`** mit den Originalantworten. Daraus liest die App die Vorschlagswerte. Bitte dieses Blatt nicht ändern oder löschen. Änderungen der Kanzlei im sichtbaren Blatt „Fragebogen“ werden nicht an den Mandanten zurückgegeben.
 
 ## Teil 6 – Update einspielen (wenn es eine neue Version gibt)
 
 1. **Container Manager → Projekt → hfs-fragebogen → Aktion → Stoppen**
-2. In File Station die Ordner `hfs/app/server` und `hfs/app/deploy` durch die neuen Versionen ersetzen. Die Ordner `daten` und `ergebnisse` bleiben unverändert.
+2. In File Station die Ordner `hfs/app/server` und `hfs/app/deploy` durch die neuen Versionen ersetzen. Der Ordner `ergebnisse` bleibt unverändert.
+
+> **Update auf das Aktenzeichen-Verfahren (Schritt 6):** Testdateien nach dem alten Schema (`HFS_Nachname_Vorname_…xlsx`) werden nicht mehr gefunden. Bitte vorher in `hfs/ergebnisse` löschen. Der Ordner `hfs/daten` wird nicht mehr benötigt und kann gelöscht werden. Im Container Manager **Aktion → Erstellen** wählen, damit die geänderte `docker-compose.yml` übernommen wird.
 3. **Aktion → Erstellen** (baut den Container neu), danach **Starten**.
 
 ## Fehlersuche
@@ -151,15 +164,21 @@ Danach merkt sich der Browser die Ausnahme für diese Adresse.
 Bitte auf **Handy, Tablet und PC** durchgehen und Auffälligkeiten notieren:
 
 - [ ] `https://<NAS-IP>:8443` öffnet sich nach einmaligem Bestätigen der Zertifikatswarnung
-- [ ] Seite öffnet sich, alle Abschnitte 1–6 sind gut lesbar und bedienbar
+- [ ] Anmeldung mit neuem Aktenzeichen + Nachname → leerer Fragebogen, Aktenzeichen oben angezeigt, Nachname gesperrt
+- [ ] Alle Abschnitte 1–6 gut lesbar und bedienbar
 - [ ] Datumsfelder zeigen das deutsche Format (TT.MM.JJJJ)
 - [ ] Kommazahlen (z. B. „1,5“ Std./Woche) lassen sich eingeben
+- [ ] Am PC: Zahl bei „Std./Woche“ sichtbar, „wieder möglich ab“ in einer Zeile mit breitem Datumsfeld
+- [ ] „Ich“ 70 % eintragen → „Andere“ wird automatisch 30 %
+- [ ] Zeitraum mit von–bis, aber ohne % → Hinweis am Zeitraum, Absenden nicht möglich
 - [ ] Zeiträume hinzufügen und entfernen funktioniert
 - [ ] Seite schließen und wieder öffnen: Eingaben sind noch da
 - [ ] Absenden ohne Einwilligung → Hinweis erscheint
-- [ ] Absenden → „Vielen Dank“, Datei erscheint in `hfs/ergebnisse` mit richtigem Namen
-- [ ] Excel-Datei öffnen: Blatt „Fragebogen“ vollständig, Blatt „HFS“ richtig vorbefüllt, Formeln rechnen nach Eintragen von Stundensatz und Stunden/Tag
-- [ ] Seite am selben Tag erneut öffnen → „bereits abgegeben“, nur Lesen
-- [ ] **Am nächsten Tag** erneut öffnen → Angaben vorausgefüllt, Korrektur absenden → zweite Datei mit Vermerk „Korrektur der Abgabe vom …“
-- [ ] Datei(en) in `hfs/ergebnisse` löschen → Seite neu laden → leerer Fragebogen
-- [ ] Zweites Gerät: eigener, unabhängiger Fragebogen
+- [ ] Absenden → „Vielen Dank“, Datei `HFS_<Aktenzeichen>_<Datum>_<Uhrzeit>.xlsx` erscheint in `hfs/ergebnisse`
+- [ ] Excel-Datei öffnen: oben das Aktenzeichen, Blatt „Fragebogen“ vollständig, Blatt „HFS“ richtig vorbefüllt, Formeln rechnen nach Eintragen von Stundensatz und Stunden/Tag
+- [ ] Erneut anmelden → Angaben vorausgefüllt, „Ihre letzte Abgabe vom …“
+- [ ] Ohne Änderung absenden → Hinweis „Sie haben nichts geändert“, keine neue Datei
+- [ ] Etwas ändern und absenden → zweite Datei mit Vermerk „Korrektur der Abgabe vom …“
+- [ ] Anmeldung mit falschem Nachnamen → Meldung, keine Daten sichtbar
+- [ ] Alle Dateien des Aktenzeichens löschen → erneut anmelden → leerer Fragebogen
+- [ ] Anderes Gerät, gleiches Aktenzeichen + Nachname → dieselben Vorschlagswerte

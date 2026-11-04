@@ -152,15 +152,15 @@ label.wahl {
 .liste label.inline {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   margin: 0;
   color: var(--grau);
   font-size: .75rem;
   line-height: 1.2;
 }
-.liste label.inline input { margin-top: 2px; }
-#taetigkeiten-vor label.inline:not(.breit) { width: 96px; }
-#taetigkeiten-nach label.inline { width: 160px; }
+.liste label.inline > span { white-space: nowrap; }
+.liste label.inline input { margin-top: 2px; flex: none; }
+.liste label.stunden input { width: 96px; }
+.liste label.datum input { width: 168px; }
 .liste label.inline.breit {
   grid-column: 1 / -1;
   flex-direction: row;
@@ -169,12 +169,12 @@ label.wahl {
   margin-left: 30px;
   font-size: .9rem;
 }
-.liste label.inline.breit input { flex: 1; margin: 0; }
+.liste label.inline.breit input { flex: 1 1 auto; width: auto; margin: 0; }
 @media (min-width: 640px) {
-  .liste label.inline:not(.breit) { flex-direction: row; align-items: center; gap: 8px; font-size: .9rem; width: auto; }
-  #taetigkeiten-vor label.inline:not(.breit) input { width: 100px; }
-  #taetigkeiten-nach label.inline input { width: 170px; }
-  .liste label.inline input { margin-top: 0; }
+  .liste label.stunden, .liste label.datum { flex-direction: row; align-items: center; gap: 10px; font-size: .9rem; }
+  .liste label.stunden input, .liste label.datum input { margin-top: 0; }
+  .liste label.stunden input { width: 110px; }
+  .liste label.datum input { width: 180px; }
 }
 
 label.inline { display: block; }
@@ -264,3 +264,33 @@ button.haupt:disabled { opacity: .6; cursor: wait; }
 /* Datenschutzseite */
 .text h2 { font-size: 1.05rem; margin: 20px 0 6px; }
 .platzhalter { background: var(--gelb-hell); color: var(--gelb); padding: 0 4px; border-radius: 4px; }
+
+/* Anmeldung, Kennung, Hinweise an Feldern (Schritt 6) */
+#anmeldung h2 { margin: 0 0 8px; font-size: 1.15rem; color: var(--blau); }
+#anmeldung p { margin: 0 0 12px; }
+.kennung {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 4px 0 12px;
+  padding: 8px 12px;
+  background: var(--blau-hell);
+  border-radius: 8px;
+  font-size: .95rem;
+}
+button.link {
+  background: none;
+  border: 0;
+  padding: 8px 0;
+  min-height: 44px;
+  color: var(--blau);
+  text-decoration: underline;
+}
+input.gesperrt, input[readonly] { background: var(--hinter); color: var(--grau); -webkit-text-fill-color: var(--grau); }
+.feldfehler { color: var(--rot); font-size: .9rem; margin: 4px 0 8px; }
+.staffel .feldfehler { grid-column: 1 / -1; margin: 8px 0 0; padding-right: 56px; }
+@media (min-width: 640px) { .staffel .feldfehler { padding-right: 0; } }
+.staffel.fehlerhaft { outline: 2px solid var(--rot); outline-offset: -2px; }
+.meldung button.neben { width: auto; margin: 8px 8px 0 0; }

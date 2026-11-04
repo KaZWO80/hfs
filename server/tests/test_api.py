@@ -8,16 +8,18 @@ from openpyxl import load_workbook
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import app as app_modul  # noqa: E402
 import excel_export  # noqa: E402
 from excel_export import ZEITZONE  # noqa: E402
 from test_excel import beispiel  # noqa: E402
 
-ID = "test-1234-abcd"
+AZ = "123/26"
+NAME = "Müller-Lüdenscheidt"
 
 
 class Uhr:
     def __init__(self):
-        self.zeit = datetime(2026, 11, 3, 10, 0, 0, tzinfo=ZEITZONE)
+        self.zeit = datetime(2026, 11, 4, 10, 0, 0, tzinfo=ZEITZONE)
 
     def __call__(self):
         return self.zeit
@@ -35,101 +37,128 @@ def uhr(monkeypatch):
 
 @pytest.fixture
 def ordner(tmp_path, monkeypatch):
-    monkeypatch.setenv("HFS_DATEN_ORDNER", str(tmp_path / "daten"))
     monkeypatch.setenv("HFS_ERGEBNIS_ORDNER", str(tmp_path / "ergebnisse"))
+    app_modul._fehlversuche.clear()
     return tmp_path / "ergebnisse"
 
 
 @pytest.fixture
 def client(ordner, uhr):
-    from app import app
-
-    return TestClient(app)
+    return TestClient(app_modul.app)
 
 
 def dateien(ordner):
     return sorted(p.name for p in ordner.glob("*.xlsx"))
 
 
-def test_fall_a_b_c_ablauf(client, uhr, ordner):
-    # Fall A: noch nichts abgegeben
-    assert client.get(f"/api/status/{ID}").json() == {"fall": "A"}
-    r = client.post("/api/antwort", json=beispiel())
-    assert r.status_code == 201 and r.json() == {"ok": True, "korrektur": False}
-    assert dateien(ordner) == ["HFS_Mueller-Luedenscheidt_Joerg_2026-11-03_100000.xlsx"]
-
-    # Fall B: gleicher Tag -> nur lesen, Abgabe gesperrt
-    uhr.stelle(2026, 11, 3, 23, 59, 0)
-    st = client.get(f"/api/status/{ID}").json()
-    assert st["fall"] == "B"
-    assert st["abgegeben_am"] == "03.11.2026" and st["abgegeben_um"] == "10:00"
-    assert st["antwort"]["nachname"] == "Müller-Lüdenscheidt"
-    assert st["antwort"]["taetigkeiten_vor"]["kochen"]["stunden_pro_woche"] == 7
-    assert "installations_id" not in st["antwort"]
-    assert client.post("/api/antwort", json=beispiel(gehindert_grund="geändert")).status_code == 409
-    assert len(dateien(ordner)) == 1
-
-    # Fall C: nächster Tag (ab 0:00 Uhr) -> Korrektur in neue Datei, alte bleibt
-    uhr.stelle(2026, 11, 4, 0, 0, 1)
-    st = client.get(f"/api/status/{ID}").json()
-    assert st["fall"] == "C" and st["abgegeben_am"] == "03.11.2026"
-    r = client.post("/api/antwort", json=beispiel(gehindert_grund="Armbruch rechts und Prellung"))
-    assert r.status_code == 201 and r.json()["korrektur"] is True
-    assert dateien(ordner) == [
-        "HFS_Mueller-Luedenscheidt_Joerg_2026-11-03_100000.xlsx",
-        "HFS_Mueller-Luedenscheidt_Joerg_2026-11-04_000001.xlsx",
-    ]
-    ws = load_workbook(ordner / dateien(ordner)[1])["Fragebogen"]
-    werte = [c.value for r in ws.iter_rows() for c in r if c.value]
-    assert "Korrektur der Abgabe vom 03.11.2026" in werte
-    assert "vorherige Datei: HFS_Mueller-Luedenscheidt_Joerg_2026-11-03_100000.xlsx" in werte
-    assert "Armbruch rechts und Prellung" in werte
-
-    # danach wieder Fall B mit den neuen Antworten
-    st = client.get(f"/api/status/{ID}").json()
-    assert st["fall"] == "B" and st["antwort"]["gehindert_grund"] == "Armbruch rechts und Prellung"
+def anmelden(client, az=AZ, name=NAME, **kw):
+    return client.post("/api/anmelden", json={"aktenzeichen": az, "nachname": name}, **kw)
 
 
-def test_kanzlei_loescht_datei_dann_leerer_fragebogen(client, uhr, ordner):
-    client.post("/api/antwort", json=beispiel())
-    for p in ordner.glob("*.xlsx"):
-        p.unlink()
-    # sogar am selben Tag: Datei gelöscht -> neu beantworten möglich
-    assert client.get(f"/api/status/{ID}").json() == {"fall": "A"}
+def test_ablauf_neu_vorhanden_korrektur(client, uhr, ordner):
+    # neues Aktenzeichen -> leerer Fragebogen
+    assert anmelden(client).json() == {"vorhanden": False}
     r = client.post("/api/antwort", json=beispiel())
     assert r.status_code == 201 and r.json()["korrektur"] is False
+    assert dateien(ordner) == ["HFS_123-26_2026-11-04_100000.xlsx"]
+
+    # erneute Anmeldung -> Vorschlagswerte aus der Datei
+    st = anmelden(client).json()
+    assert st["vorhanden"] is True
+    assert (st["abgegeben_am"], st["abgegeben_um"], st["stand"]) == ("04.11.2026", "10:00", "2026-11-04_100000")
+    assert st["antwort"]["taetigkeiten_vor"]["kochen"]["stunden_pro_woche"] == 7
+    assert "einwilligung" not in st["antwort"]
+
+    # unverändert erneut senden -> abgelehnt, keine neue Datei
+    uhr.stelle(2026, 11, 4, 10, 5, 0)
+    r = client.post("/api/antwort", json=beispiel())
+    assert r.status_code == 409 and "nichts geändert" in r.json()["detail"]
+    assert len(dateien(ordner)) == 1
+
+    # geändert -> neue Datei mit Korrekturvermerk, alte bleibt (auch am selben Tag)
+    r = client.post("/api/antwort", json=beispiel(gehindert_grund="Armbruch rechts und Prellung"))
+    assert r.status_code == 201 and r.json()["korrektur"] is True
+    assert dateien(ordner) == ["HFS_123-26_2026-11-04_100000.xlsx", "HFS_123-26_2026-11-04_100500.xlsx"]
+    werte = [c.value for row in load_workbook(ordner / dateien(ordner)[1])["Fragebogen"].iter_rows()
+             for c in row if c.value]
+    assert "Korrektur der Abgabe vom 04.11.2026" in werte
+    assert "vorherige Datei: HFS_123-26_2026-11-04_100000.xlsx" in werte
+
+    # Vorschlagswerte kommen immer aus der neuesten Datei
+    assert anmelden(client).json()["antwort"]["gehindert_grund"] == "Armbruch rechts und Prellung"
 
 
-def test_nur_letzte_datei_geloescht_zeigt_vorherige_abgabe(client, uhr, ordner):
+def test_nachname_wird_tolerant_verglichen(client, ordner):
+    client.post("/api/antwort", json=beispiel())
+    for name in ["müller-lüdenscheidt", "Mueller Luedenscheidt", "  MÜLLER-LÜDENSCHEIDT "]:
+        assert anmelden(client, name=name).json()["vorhanden"] is True
+    assert anmelden(client, az="123-26").json()["vorhanden"] is True  # gleiche Schreibweise im Dateinamen
+
+
+def test_falscher_nachname_zeigt_keine_daten(client, ordner):
+    client.post("/api/antwort", json=beispiel())
+    r = anmelden(client, name="Meier")
+    assert r.status_code == 403
+    assert "passen nicht zusammen" in r.json()["detail"] and "antwort" not in r.json()
+    # auch Absenden unter fremdem Namen wird abgelehnt
+    assert client.post("/api/antwort", json=beispiel(nachname="Meier")).status_code == 403
+    assert len(dateien(ordner)) == 1
+
+
+def test_sperre_nach_zehn_fehlversuchen(client, ordner):
+    client.post("/api/antwort", json=beispiel())
+    for _ in range(10):
+        assert anmelden(client, name="Falsch").status_code == 403
+    # jetzt gesperrt – auch mit richtigem Namen
+    r = anmelden(client)
+    assert r.status_code == 429 and "15 Minuten" in r.json()["detail"]
+    # anderes Aktenzeichen von anderer Adresse bleibt nutzbar
+    andere = anmelden(client, az="999/26", name="Neu", headers={"X-Forwarded-For": "10.0.0.9"})
+    assert andere.status_code == 200
+
+
+def test_sperre_endet_nach_15_minuten(client, ordner, monkeypatch):
+    client.post("/api/antwort", json=beispiel())
+    t = [1000.0]
+    monkeypatch.setattr(app_modul.time, "monotonic", lambda: t[0])
+    for _ in range(10):
+        anmelden(client, name="Falsch")
+    assert anmelden(client).status_code == 429
+    t[0] += 15 * 60 + 1
+    assert anmelden(client).status_code == 200
+
+
+def test_kanzlei_loescht_dateien(client, uhr, ordner):
     client.post("/api/antwort", json=beispiel(gehindert_grund="erste"))
     uhr.stelle(2026, 11, 5, 9, 0, 0)
     client.post("/api/antwort", json=beispiel(gehindert_grund="zweite"))
-    (ordner / "HFS_Mueller-Luedenscheidt_Joerg_2026-11-05_090000.xlsx").unlink()
-    st = client.get(f"/api/status/{ID}").json()
-    assert st["fall"] == "C" and st["antwort"]["gehindert_grund"] == "erste"
+    # nur neueste gelöscht -> vorherige Abgabe ist wieder Vorschlag
+    (ordner / "HFS_123-26_2026-11-05_090000.xlsx").unlink()
+    assert anmelden(client).json()["antwort"]["gehindert_grund"] == "erste"
+    # alle gelöscht -> neu beantworten, auch mit anderem Namen
+    for p in ordner.glob("*.xlsx"):
+        p.unlink()
+    assert anmelden(client, name="Neuer Name").json() == {"vorhanden": False}
 
 
-def test_geraete_sind_unabhaengig(client, uhr, ordner):
-    assert client.post("/api/antwort", json=beispiel()).status_code == 201
-    assert client.post("/api/antwort", json=beispiel(installations_id="anderes-geraet")).status_code == 201
-    assert client.get("/api/status/anderes-geraet").json()["fall"] == "B"
-    assert client.get("/api/status/drittes-geraet").json() == {"fall": "A"}
+def test_aktenzeichen_sind_unabhaengig(client, ordner):
+    client.post("/api/antwort", json=beispiel())
+    client.post("/api/antwort", json=beispiel(aktenzeichen="124/26", nachname="Schmidt"))
+    assert anmelden(client, az="124/26", name="Schmidt").json()["antwort"]["nachname"] == "Schmidt"
+    assert anmelden(client, az="125/26", name="Egal").json() == {"vorhanden": False}
 
 
-def test_ungueltige_kennung(client):
-    assert client.get("/api/status/kurz").status_code == 400
-    assert client.get("/api/status/..%2F..%2Fetc").status_code in (400, 404)
-
-
-def test_validierung_ueber_api(client, ordner):
+def test_validierung(client, ordner):
     assert client.post("/api/antwort", json=beispiel(einwilligung=False)).status_code == 422
-    assert client.post("/api/antwort", json=beispiel(nachname="")).status_code == 422
+    assert client.post("/api/antwort", json=beispiel(anteil_ich_prozent=70, anteil_andere_prozent=20)).status_code == 422
+    assert anmelden(client, az="../../etc").status_code == 422
+    assert anmelden(client, az="").status_code == 422
     assert dateien(ordner) == []
 
 
 def test_seiten_und_sicherheitsheader(client):
     r = client.get("/")
-    assert r.status_code == 200 and "Haushaltsführungsschaden" in r.text
+    assert r.status_code == 200 and "Aktenzeichen" in r.text
     assert r.headers["content-security-policy"].startswith("default-src 'self'")
     assert client.get("/datenschutz.html").status_code == 200
     assert client.get("/api/fragebogen").json()["max_staffeln"] == 4

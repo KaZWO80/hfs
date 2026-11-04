@@ -7,11 +7,15 @@
   - Zeilen 2-5: Zeitraum (A), Tage (B), Anteil der Beeinträchtigung (C).
     Stundensatz (D) und Stunden/Tag (E) bleiben leer (Kanzlei).
   - Zeilen 10-34, Spalte B: wöchentlicher Zeitaufwand je Tätigkeit.
+* Ausgeblendetes Blatt "_Daten": die Originalantworten als JSON. Daraus
+  liest die App die Vorschlagswerte für eine Korrektur (Plan, Abschnitt 12.2).
 * Alle übrigen Blätter und Formeln der Vorlage bleiben unverändert.
+
+Dateiname: HFS_<Aktenzeichen>_<JJJJ-MM-TT>_<hhmmss>.xlsx
 """
 
+import json
 import re
-import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -20,13 +24,13 @@ from zoneinfo import ZoneInfo
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from models import Antwort
+from models import Antwort, ascii_text
 from questionnaire import GERAETE, TAETIGKEITEN
 
 TEMPLATE = Path(__file__).parent / "templates" / "Anspruchsberechnungen.xlsx"
 ZEITZONE = ZoneInfo("Europe/Berlin")
-
-_UMLAUTE = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"})
+DATENBLATT = "_Daten"
+_ZELLE_MAX = 30000  # Excel erlaubt max. 32767 Zeichen pro Zelle
 
 
 @dataclass
@@ -42,18 +46,56 @@ def jetzt() -> datetime:
 
 
 def dateiname_teil(text: str) -> str:
-    """Macht aus einem Namen einen sicheren Dateinamen-Bestandteil."""
-    text = text.strip().translate(_UMLAUTE)
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    text = re.sub(r"[^A-Za-z0-9-]+", "-", text).strip("-")
+    """Macht aus einem Text (z. B. Aktenzeichen "123/26") einen sicheren
+    Dateinamen-Bestandteil ("123-26")."""
+    text = re.sub(r"[^A-Za-z0-9-]+", "-", ascii_text(text)).strip("-")
     return text[:40] or "unbekannt"
 
 
-def dateiname(antwort: Antwort, zeitpunkt: datetime, zusatz: str = "") -> str:
-    return (
-        f"HFS_{dateiname_teil(antwort.nachname)}_{dateiname_teil(antwort.vorname)}_"
-        f"{zeitpunkt:%Y-%m-%d_%H%M%S}{zusatz}.xlsx"
+def dateiname(aktenzeichen: str, zeitpunkt: datetime, zusatz: str = "") -> str:
+    return f"HFS_{dateiname_teil(aktenzeichen)}_{zeitpunkt:%Y-%m-%d_%H%M%S}{zusatz}.xlsx"
+
+
+@dataclass
+class Abgabe:
+    """Eine vorhandene Excel-Datei zu einem Aktenzeichen."""
+
+    pfad: Path
+    zeit: datetime
+
+    @property
+    def stand(self) -> str:
+        return self.pfad.stem.split("_", 2)[2]
+
+
+def abgaben(ordner: Path, aktenzeichen: str) -> list[Abgabe]:
+    """Alle Excel-Dateien eines Aktenzeichens, älteste zuerst."""
+    muster = re.compile(
+        rf"^HFS_{re.escape(dateiname_teil(aktenzeichen))}_(\d{{4}}-\d{{2}}-\d{{2}}_\d{{6}})(?:_(\d+))?\.xlsx$",
+        re.IGNORECASE,  # "abc/26" und "ABC/26" sind dasselbe Aktenzeichen
     )
+    gefunden = []
+    for p in ordner.glob("HFS_*.xlsx") if ordner.exists() else []:
+        m = muster.match(p.name)
+        if m:
+            zeit = datetime.strptime(m.group(1), "%Y-%m-%d_%H%M%S").replace(tzinfo=ZEITZONE)
+            gefunden.append((zeit, int(m.group(2) or 1), p))
+    return [Abgabe(p, z) for z, _, p in sorted(gefunden)]
+
+
+def lade_antwort(pfad: Path) -> dict | None:
+    """Liest die Originalantworten aus dem ausgeblendeten Blatt "_Daten"."""
+    try:
+        wb = load_workbook(pfad, read_only=True)
+        try:
+            if DATENBLATT not in wb.sheetnames:
+                return None
+            teile = [row[0] for row in wb[DATENBLATT].iter_rows(min_row=2, max_col=1, values_only=True) if row[0]]
+        finally:
+            wb.close()
+        return json.loads("".join(teile))
+    except Exception:  # beschädigte oder fremde Datei -> wie nicht vorhanden behandeln
+        return None
 
 
 # ------------------------------------------------------------ Formatierung --
@@ -125,6 +167,7 @@ def _blatt_fragebogen(wb, a: Antwort, zeitpunkt: datetime, korrektur: Korrektur 
     s = _Schreiber(ws)
 
     s.add("Haushaltsführungsschaden – Fragebogen", font=s.TITEL, linie=False)
+    s.add("Aktenzeichen", a.aktenzeichen)
     s.add("Name", f"{a.anrede} {a.vorname} {a.nachname}".strip())
     s.add("Eingegangen am", zeitpunkt.strftime("%d.%m.%Y, %H:%M Uhr"))
     if korrektur:
@@ -252,6 +295,15 @@ def _blatt_hfs(wb, a: Antwort):
 
 # ------------------------------------------------------------------ Export --
 
+def _blatt_daten(wb, a: Antwort):
+    ws = wb.create_sheet(DATENBLATT)
+    ws["A1"] = "Originalantworten des Fragebogens (nicht ändern – wird von der App gelesen)"
+    text = json.dumps(a.model_dump(mode="json"), ensure_ascii=False)
+    for i in range(0, len(text), _ZELLE_MAX):
+        ws.cell(row=2 + i // _ZELLE_MAX, column=1, value=text[i:i + _ZELLE_MAX])
+    ws.sheet_state = "hidden"
+
+
 def erstelle_excel(
     antwort: Antwort,
     ziel_ordner: Path,
@@ -262,6 +314,7 @@ def erstelle_excel(
     wb = load_workbook(TEMPLATE)
     _blatt_hfs(wb, antwort)
     ws = _blatt_fragebogen(wb, antwort, zeitpunkt, korrektur)
+    _blatt_daten(wb, antwort)
     wb.active = wb.index(ws)
     for blatt in wb.worksheets:
         blatt.sheet_view.tabSelected = blatt is ws
@@ -269,10 +322,10 @@ def erstelle_excel(
     wb.calculation.fullCalcOnLoad = True
 
     ziel_ordner.mkdir(parents=True, exist_ok=True)
-    pfad = ziel_ordner / dateiname(antwort, zeitpunkt)
+    pfad = ziel_ordner / dateiname(antwort.aktenzeichen, zeitpunkt)
     n = 2
     while pfad.exists():
-        pfad = ziel_ordner / dateiname(antwort, zeitpunkt, f"_{n}")
+        pfad = ziel_ordner / dateiname(antwort.aktenzeichen, zeitpunkt, f"_{n}")
         n += 1
     wb.save(pfad)
     return pfad

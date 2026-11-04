@@ -5,7 +5,6 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TZ=Europe/Berlin \
-    HFS_DATEN_ORDNER=/daten \
     HFS_ERGEBNIS_ORDNER=/ergebnisse
 
 WORKDIR /app
@@ -20,5 +19,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=60s --timeout=5s --start-period=10s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/fragebogen', timeout=4)"
 
-# Genau ein Prozess (--workers 1): die Tagessperre setzt eine gemeinsame Sperre im Speicher voraus.
+# Genau ein Prozess (--workers 1): Dateisperre beim Speichern und Zähler für Fehlversuche liegen im Speicher.
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--no-server-header"]

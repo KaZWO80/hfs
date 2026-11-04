@@ -1,5 +1,7 @@
 """Datenmodell einer Fragebogen-Antwort (Validierung auf dem Server)."""
 
+import re
+import unicodedata
 from datetime import date
 from typing import Literal, Optional
 
@@ -9,6 +11,23 @@ from questionnaire import GERAET_KEYS, MAX_STAFFELN, TAETIGKEIT_KEYS
 
 Kurztext = Field(default="", max_length=200)
 Langtext = Field(default="", max_length=5000)
+
+# Aktenzeichen, wie die Kanzlei es vergibt, z. B. "123/26" oder "HFS-2026-0042".
+AKTENZEICHEN_MUSTER = r"^[A-Za-z0-9ÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß /.\-_]{0,29}$"
+
+_UMLAUTE = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"})
+
+
+def ascii_text(text: str) -> str:
+    """Umlaute umschreiben (ä -> ae) und übrige Akzente entfernen."""
+    text = text.strip().translate(_UMLAUTE)
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+
+
+def name_vergleich(name: str) -> str:
+    """Vergleichsform eines Nachnamens: ohne Groß-/Kleinschreibung, Leer- und
+    Sonderzeichen; "Müller-Lüdenscheidt" == "mueller luedenscheidt"."""
+    return re.sub(r"[^a-z0-9]", "", ascii_text(name).lower())
 
 
 class Staffel(BaseModel):
@@ -80,9 +99,14 @@ class Antwort(BaseModel):
     taetigkeiten_vor: dict[str, TaetigkeitVor] = Field(default_factory=dict)
     taetigkeiten_nach: dict[str, TaetigkeitNach] = Field(default_factory=dict)
 
-    # Technik / Recht
+    # Zuordnung / Recht
+    aktenzeichen: str = Field(min_length=1, max_length=30, pattern=AKTENZEICHEN_MUSTER)
     einwilligung: bool
-    installations_id: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
+
+    @field_validator("aktenzeichen", mode="before")
+    @classmethod
+    def _az_strip(cls, v):
+        return v.strip() if isinstance(v, str) else v
 
     @field_validator("nachname", "vorname")
     @classmethod
@@ -114,4 +138,11 @@ class Antwort(BaseModel):
             raise ValueError("Die Einwilligung zur Datenverarbeitung ist erforderlich.")
         if self.gehindert_von and self.gehindert_bis and self.gehindert_bis < self.gehindert_von:
             raise ValueError("Zeitraum der Verhinderung: 'bis' liegt vor 'von'")
+        ich, andere = self.anteil_ich_prozent, self.anteil_andere_prozent
+        if (ich is None) != (andere is None) or (ich is not None and abs(ich + andere - 100) > 0.001):
+            raise ValueError("Aufteilung der Haushaltsführung: 'Ich' und 'Andere' müssen zusammen 100 % ergeben.")
         return self
+
+    def vergleichsdaten(self) -> dict:
+        """Inhalt ohne Einwilligung/Aktenzeichen – zum Erkennen unveränderter Abgaben."""
+        return self.model_dump(mode="json", exclude={"einwilligung", "aktenzeichen"})

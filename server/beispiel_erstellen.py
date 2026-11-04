@@ -68,7 +68,7 @@ BEISPIEL = {
         "gartenpflege": {"beeintraechtigt": True, "wieder_moeglich_ab": "2026-08-01"},
     },
     "einwilligung": True,
-    "installations_id": "beispiel-0001",
+    "aktenzeichen": "123/26",
 }
 
 if __name__ == "__main__":

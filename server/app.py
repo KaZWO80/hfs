@@ -2,89 +2,99 @@
 
 Start (Entwicklung, im Ordner server/):  uvicorn app:app --reload --port 8080
 
-Umgebungsvariablen:
-  HFS_DATEN_ORDNER      interne Daten (gespeicherte Antworten), Standard: ./daten
-  HFS_ERGEBNIS_ORDNER   Excel-Dateien für die Kanzlei, Standard: <Daten>/ergebnisse
+Umgebungsvariable:
+  HFS_ERGEBNIS_ORDNER   Excel-Dateien für die Kanzlei, Standard: ./daten/ergebnisse
 
-Abgabe-Regeln (Plan, Abschnitt 6), je Browser-Kennung:
-  Fall A  noch nie abgegeben oder alle Excel-Dateien gelöscht -> leerer Fragebogen
-  Fall B  heute bereits abgegeben -> Antworten nur lesen, keine Abgabe
-  Fall C  an früherem Tag abgegeben -> vorausgefüllt, Abgabe = Korrektur (neue Datei)
+Aktenzeichen-Verfahren (Plan, Abschnitt 12.2):
+  * Anmeldung mit Aktenzeichen + Nachname.
+  * Vorhandene Datei zum Aktenzeichen -> Vorschlagswerte aus der neuesten Datei,
+    aber nur, wenn der Nachname passt.
+  * Jede Abgabe mit Änderungen erzeugt eine neue Datei; unveränderte Abgaben
+    werden abgelehnt. Die Excel-Dateien sind die einzige Datenquelle.
 """
 
-import json
 import os
-import re
 import threading
-from datetime import datetime
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 import excel_export
-from excel_export import Korrektur, erstelle_excel
-from models import Antwort
+from excel_export import Korrektur, abgaben, erstelle_excel, lade_antwort
+from models import AKTENZEICHEN_MUSTER, Antwort, name_vergleich
 from questionnaire import definition
 
 BASIS = Path(__file__).parent
 _lock = threading.Lock()
-_ID_MUSTER = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+
+# Schutz gegen Durchprobieren: max. 10 Fehlversuche in 15 Minuten,
+# gezählt je Aktenzeichen und je Absender-Adresse.
+MAX_FEHLVERSUCHE = 10
+SPERRZEIT = 15 * 60
+_fehlversuche: dict[str, deque] = defaultdict(deque)
+
+FALSCHER_NAME = ("Aktenzeichen und Nachname passen nicht zusammen. Bitte prüfen Sie Ihre Eingabe "
+                 "oder wenden Sie sich an die Kanzlei.")
+GESPERRT = "Zu viele Fehlversuche. Bitte versuchen Sie es in 15 Minuten erneut."
 
 app = FastAPI(title="Fragebogen Haushaltsführungsschaden", docs_url=None, redoc_url=None, openapi_url=None)
 
 
-# ---------------------------------------------------------------- Ablage ----
-
-def daten_ordner() -> Path:
-    return Path(os.environ.get("HFS_DATEN_ORDNER", BASIS / "daten"))
-
-
 def ergebnis_ordner() -> Path:
-    return Path(os.environ.get("HFS_ERGEBNIS_ORDNER", daten_ordner() / "ergebnisse"))
+    return Path(os.environ.get("HFS_ERGEBNIS_ORDNER", BASIS / "daten" / "ergebnisse"))
 
 
-def _antwort_pfad(installations_id: str) -> Path:
-    if not _ID_MUSTER.match(installations_id):
-        raise HTTPException(400, "Ungültige Kennung")
-    return daten_ordner() / "antworten" / f"{installations_id}.json"
+# ------------------------------------------------------- Fehlversuche ------
+
+def _schluessel(request: Request, aktenzeichen: str) -> list[str]:
+    absender = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+        request.client.host if request.client else "?")
+    return [f"ip:{absender}", f"az:{excel_export.dateiname_teil(aktenzeichen).lower()}"]
 
 
-def _lade_abgaben(installations_id: str) -> list[dict]:
-    """Abgaben dieser Kennung, deren Excel-Datei noch existiert (älteste zuerst).
-
-    Hat die Kanzlei alle Dateien gelöscht, werden auch die gespeicherten
-    Antworten verworfen (-> Fall A, leerer Fragebogen).
-    """
-    p = _antwort_pfad(installations_id)
-    if not p.exists():
-        return []
-    abgaben = [a for a in json.loads(p.read_text("utf-8")) if (ergebnis_ordner() / a["datei"]).exists()]
-    if not abgaben:
-        p.unlink()
-    return abgaben
+def _gesperrt(schluessel: list[str]) -> bool:
+    grenze = time.monotonic() - SPERRZEIT
+    for k in schluessel:
+        q = _fehlversuche[k]
+        while q and q[0] < grenze:
+            q.popleft()
+        if len(q) >= MAX_FEHLVERSUCHE:
+            return True
+    return False
 
 
-def _speichere_abgaben(installations_id: str, abgaben: list[dict]) -> None:
-    p = _antwort_pfad(installations_id)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(abgaben, ensure_ascii=False, indent=1), "utf-8")
-    tmp.replace(p)
+def _fehlversuch(schluessel: list[str]) -> None:
+    for k in schluessel:
+        _fehlversuche[k].append(time.monotonic())
 
 
-def _status(abgaben: list[dict], heute) -> dict:
-    if not abgaben:
-        return {"fall": "A"}
-    letzte = abgaben[-1]
-    zeit = datetime.fromisoformat(letzte["zeit"])
-    return {
-        "fall": "B" if zeit.date() == heute else "C",
-        "abgegeben_am": zeit.strftime("%d.%m.%Y"),
-        "abgegeben_um": zeit.strftime("%H:%M"),
-        "antwort": letzte["antwort"],
-    }
+# ------------------------------------------------------- Datei-Zugriff -----
+
+def _neueste(aktenzeichen: str):
+    """Neueste lesbare Abgabe (Abgabe, Antwort-dict) oder (None, None)."""
+    for abgabe in reversed(abgaben(ergebnis_ordner(), aktenzeichen)):
+        daten = lade_antwort(abgabe.pfad)
+        if daten is not None:
+            return abgabe, daten
+    return None, None
+
+
+def _pruefe_zugang(request: Request, aktenzeichen: str, nachname: str):
+    """Liefert (Abgabe, Antwort) der neuesten Datei oder (None, None) bei neuem
+    Aktenzeichen. Wirft 403 bei falschem Nachnamen, 429 bei Sperre."""
+    schluessel = _schluessel(request, aktenzeichen)
+    if _gesperrt(schluessel):
+        raise HTTPException(429, GESPERRT)
+    abgabe, daten = _neueste(aktenzeichen)
+    if abgabe and name_vergleich(daten.get("nachname", "")) != name_vergleich(nachname):
+        _fehlversuch(schluessel)
+        raise HTTPException(403, FALSCHER_NAME)
+    return abgabe, daten
 
 
 # ------------------------------------------------------------------- API ----
@@ -105,32 +115,43 @@ def fragebogen():
     return definition()
 
 
-@app.get("/api/status/{installations_id}")
-def status(installations_id: str):
+class Anmeldung(BaseModel):
+    aktenzeichen: str = Field(min_length=1, max_length=30, pattern=AKTENZEICHEN_MUSTER)
+    nachname: str = Field(min_length=1, max_length=80)
+
+
+@app.post("/api/anmelden")
+def anmelden(daten: Anmeldung, request: Request):
+    az = daten.aktenzeichen.strip()
     with _lock:
-        return _status(_lade_abgaben(installations_id), excel_export.jetzt().date())
+        abgabe, antwort = _pruefe_zugang(request, az, daten.nachname)
+    if not abgabe:
+        return {"vorhanden": False}
+    antwort.pop("einwilligung", None)
+    return {
+        "vorhanden": True,
+        "stand": abgabe.stand,
+        "abgegeben_am": abgabe.zeit.strftime("%d.%m.%Y"),
+        "abgegeben_um": abgabe.zeit.strftime("%H:%M"),
+        "antwort": antwort,
+    }
 
 
 @app.post("/api/antwort", status_code=201)
-def antwort_speichern(antwort: Antwort):
+def antwort_speichern(antwort: Antwort, request: Request):
     with _lock:
-        zeit = excel_export.jetzt()
-        abgaben = _lade_abgaben(antwort.installations_id)
-        st = _status(abgaben, zeit.date())
-        if st["fall"] == "B":
-            raise HTTPException(409, "Sie haben den Fragebogen heute bereits abgegeben. Änderungen sind ab morgen möglich.")
+        abgabe, vorher = _pruefe_zugang(request, antwort.aktenzeichen, antwort.nachname)
         korrektur = None
-        if st["fall"] == "C":
-            vorher = abgaben[-1]
-            korrektur = Korrektur(datetime.fromisoformat(vorher["zeit"]).date(), vorher["datei"])
-        pfad = erstelle_excel(antwort, ergebnis_ordner(), zeit, korrektur)
-        abgaben.append({
-            "zeit": zeit.isoformat(timespec="seconds"),
-            "datei": pfad.name,
-            "antwort": antwort.model_dump(mode="json", exclude={"installations_id"}),
-        })
-        _speichere_abgaben(antwort.installations_id, abgaben)
-    return {"ok": True, "korrektur": korrektur is not None}
+        if abgabe:
+            vorher_vergleich = Antwort.model_validate({**vorher, "einwilligung": True}).vergleichsdaten()
+            if vorher_vergleich == antwort.vergleichsdaten():
+                raise HTTPException(409, "Sie haben nichts geändert. Ihre Angaben vom "
+                                         f"{abgabe.zeit:%d.%m.%Y} liegen der Kanzlei bereits vor.")
+            korrektur = Korrektur(abgabe.zeit.date(), abgabe.pfad.name)
+        pfad = erstelle_excel(antwort, ergebnis_ordner(), excel_export.jetzt(), korrektur)
+        neu = next(x for x in abgaben(ergebnis_ordner(), antwort.aktenzeichen) if x.pfad == pfad)
+    return {"ok": True, "korrektur": korrektur is not None, "stand": neu.stand,
+            "abgegeben_am": neu.zeit.strftime("%d.%m.%Y"), "abgegeben_um": neu.zeit.strftime("%H:%M")}
 
 
 @app.exception_handler(HTTPException)

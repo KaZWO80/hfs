@@ -8,7 +8,8 @@ from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from excel_export import TEMPLATE, ZEITZONE, Korrektur, dateiname_teil, erstelle_excel  # noqa: E402
+from excel_export import (  # noqa: E402
+    DATENBLATT, TEMPLATE, ZEITZONE, Korrektur, abgaben, dateiname_teil, erstelle_excel, lade_antwort)
 from models import Antwort  # noqa: E402
 from questionnaire import GERAETE, TAETIGKEITEN  # noqa: E402
 
@@ -43,7 +44,7 @@ def beispiel(**extra) -> dict:
         },
         "taetigkeiten_nach": {"kochen": {"beeintraechtigt": True, "wieder_moeglich_ab": "2026-02-15"}},
         "einwilligung": True,
-        "installations_id": "test-1234-abcd",
+        "aktenzeichen": "123/26",
     }
     d.update(extra)
     return d
@@ -68,8 +69,9 @@ def test_dateiname_teil():
     assert dateiname_teil("///") == "unbekannt"
 
 
-def test_dateiname(datei):
-    assert datei.name == "HFS_Mueller-Luedenscheidt_Joerg_2026-11-03_140509.xlsx"
+def test_dateiname_mit_aktenzeichen(datei):
+    assert datei.name == "HFS_123-26_2026-11-03_140509.xlsx"
+    assert dateiname_teil("AZ 12/26.b") == "AZ-12-26-b"
 
 
 def test_gleicher_name_gleiche_zeit_ueberschreibt_nicht(tmp_path):
@@ -121,7 +123,8 @@ def test_vorlage_sonst_unveraendert(datei):
     """Alle Zellen der Vorlage bleiben gleich – außer den befüllten HFS-Zellen."""
     vorlage = load_workbook(TEMPLATE)
     neu = load_workbook(datei)
-    assert neu.sheetnames == ["Fragebogen", *vorlage.sheetnames]
+    assert neu.sheetnames == ["Fragebogen", *vorlage.sheetnames, DATENBLATT]
+    assert neu[DATENBLATT].sheet_state == "hidden"
     befuellt = {"A2", "B2", "C2", "A3", "B3", "C3", "B10", "B20", "B21", "B28"}
     for ws in vorlage.worksheets:
         for row in ws.iter_rows():
@@ -145,6 +148,7 @@ def test_fragebogen_ist_erstes_und_aktives_blatt(datei):
 def test_fragebogen_antworten(datei):
     t = texte(load_workbook(datei)["Fragebogen"])
     assert "Herr Jörg Müller-Lüdenscheidt" in t
+    assert "123/26" in t  # Aktenzeichen
     assert "03.11.2026, 14:05 Uhr" in t
     assert "Armbruch rechts" in t
     assert "10.01.2026 – 31.01.2026" in t
@@ -155,7 +159,7 @@ def test_fragebogen_antworten(datei):
 
 
 def test_fragebogen_enthaelt_alle_fragen_auch_unbeantwortet(tmp_path):
-    minimal = Antwort(nachname="Muster", vorname="Max", einwilligung=True, installations_id="minimal-01")
+    minimal = Antwort(nachname="Muster", vorname="Max", einwilligung=True, aktenzeichen="7/26")
     ws = load_workbook(erstelle_excel(minimal, tmp_path, ZEIT))["Fragebogen"]
     spalte_a = [c.value for c in ws["A"] if c.value]
     for frage in [
@@ -187,7 +191,11 @@ def test_korrektur_wird_gekennzeichnet(tmp_path):
     {"nachname": "  "},
     {"geraete": ["atomreaktor"]},
     {"taetigkeiten_vor": {"fliegen": {"aktiv": True}}},
-    {"installations_id": "../../x"},
+    {"aktenzeichen": "../../x"},
+    {"aktenzeichen": ""},
+    {"aktenzeichen": "A" * 31},
+    {"anteil_ich_prozent": 60, "anteil_andere_prozent": 30},
+    {"anteil_ich_prozent": 60, "anteil_andere_prozent": None},
     {"staffeln": [{"von": "2026-02-01", "bis": "2026-01-01", "prozent": 50}]},
     {"staffeln": [{"von": "2026-01-01", "bis": "2026-01-02", "prozent": 150}]},
     {"staffeln": [{"von": "2026-01-01", "bis": "2026-01-02", "prozent": 10}] * 5},
@@ -196,3 +204,39 @@ def test_korrektur_wird_gekennzeichnet(tmp_path):
 def test_ungueltige_angaben_werden_abgelehnt(aenderung):
     with pytest.raises(ValidationError):
         Antwort(**beispiel(**aenderung))
+
+
+# ------------------------------------------------ Datenblatt / Abgaben --
+
+def test_originalantworten_werden_gespeichert_und_gelesen(datei):
+    daten = lade_antwort(datei)
+    assert daten == Antwort(**beispiel()).model_dump(mode="json")
+
+
+def test_lange_texte_passen_ins_datenblatt(tmp_path):
+    lang = "x" * 5000
+    a = Antwort(**beispiel(gehindert_grund=lang, schmerzen=lang, besonderheiten=lang,
+                           bezahlte_hilfe=True, bezahlte_hilfe_taetigkeiten=lang))
+    p = erstelle_excel(a, tmp_path, ZEIT)
+    assert lade_antwort(p)["schmerzen"] == lang
+
+
+def test_lade_antwort_bei_fremder_datei(tmp_path):
+    fremd = tmp_path / "HFS_123-26_2026-01-01_000000.xlsx"
+    fremd.write_bytes(b"keine Excel-Datei")
+    assert lade_antwort(fremd) is None
+    assert lade_antwort(TEMPLATE) is None  # Excel ohne Datenblatt
+
+
+def test_abgaben_sortiert_und_nur_passendes_aktenzeichen(tmp_path):
+    a = Antwort(**beispiel())
+    p1 = erstelle_excel(a, tmp_path, datetime(2026, 11, 3, 9, 0, 0, tzinfo=ZEITZONE))
+    p2 = erstelle_excel(a, tmp_path, datetime(2026, 11, 4, 9, 0, 0, tzinfo=ZEITZONE))
+    p3 = erstelle_excel(a, tmp_path, datetime(2026, 11, 4, 9, 0, 0, tzinfo=ZEITZONE))  # gleiche Sekunde -> _2
+    erstelle_excel(Antwort(**beispiel(aktenzeichen="123/261")), tmp_path, ZEIT)
+    erstelle_excel(Antwort(**beispiel(aktenzeichen="23/26")), tmp_path, ZEIT)
+    (tmp_path / "HFS_123-26_notiz.xlsx").write_bytes(b"")
+    assert [x.pfad for x in abgaben(tmp_path, "123/26")] == [p1, p2, p3]
+    assert [x.pfad for x in abgaben(tmp_path, "123-26")] == [p1, p2, p3]  # gleiche Schreibweise im Dateinamen
+    assert abgaben(tmp_path, "123/26")[-1].stand == "2026-11-04_090000_2"
+    assert abgaben(tmp_path / "fehlt", "123/26") == []
